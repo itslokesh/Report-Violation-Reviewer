@@ -1,8 +1,9 @@
 import { BaseApiService, ApiError, NetworkError } from '../../shared/services/api';
+import { APP_CONFIG } from '../../config/app.config';
 import { ApiResponse } from '../../shared/models/common';
 
 export class WebApiService extends BaseApiService {
-  constructor(baseUrl: string = 'http://localhost:3000') {
+  constructor(baseUrl: string = APP_CONFIG.api.baseUrl) {
     super(baseUrl);
   }
 

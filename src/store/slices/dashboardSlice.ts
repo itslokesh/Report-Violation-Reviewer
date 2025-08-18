@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { DashboardStats, AnalyticsFilter } from '../../shared/models/dashboard';
+import { DashboardStats, AnalyticsFilter, WeeklyTrendData, MonthlyTrendData } from '../../shared/models/dashboard';
+import { ViolationType } from '../../shared/models/common';
 import { WebApiService } from '../../web/services/WebApiService';
 
 // Async thunks
@@ -11,7 +12,24 @@ export const fetchDashboardStats = createAsyncThunk(
       const response = await apiService.get('/police/dashboard', filter);
       
       if (response.success && response.data) {
-        // Transform backend response to match our DashboardStats interface
+        // Pass through and normalize trend arrays if present
+        const weeklyTrend: WeeklyTrendData[] = (response.data.weeklyTrend || []).map((t: any) => ({
+          date: t.date,
+          reports: t.reports ?? 0,
+          approved: t.approved ?? 0,
+          rejected: t.rejected ?? 0,
+          pending: t.pending ?? 0,
+        }));
+
+        const monthlyTrend: MonthlyTrendData[] = (response.data.monthlyTrend || []).map((t: any) => ({
+          month: t.month,
+          reports: t.reports ?? 0,
+          approved: t.approved ?? 0,
+          rejected: t.rejected ?? 0,
+          pending: t.pending ?? 0,
+          revenue: t.revenue ?? 0,
+        }));
+
         const stats: DashboardStats = {
           totalReports: response.data.totalReports || 0,
           pendingReports: response.data.pendingReports || 0,
@@ -21,9 +39,9 @@ export const fetchDashboardStats = createAsyncThunk(
           processedToday: (response.data.approvedReports || 0) + (response.data.rejectedReports || 0),
           approvedToday: response.data.approvedReports || 0,
           rejectedToday: response.data.rejectedReports || 0,
-          averageProcessingTime: 1800, // Default 30 minutes
-          weeklyTrend: [], // Will be populated separately
-          monthlyTrend: [], // Will be populated separately
+          averageProcessingTime: response.data.averageProcessingTime ?? 1800,
+          weeklyTrend,
+          monthlyTrend,
           reportsByViolationType: response.data.reportsByViolationType || {},
           reportsByCity: response.data.reportsByCity || {},
           reportsByStatus: response.data.reportsByStatus || {}
@@ -46,7 +64,27 @@ export const fetchViolationTypeStats = createAsyncThunk(
       const response = await apiService.get('/police/dashboard/violation-types', filter);
       
       if (response.success && response.data) {
-        return response.data;
+        // Backend returns { violationType, count, percentage, trend?, previousPeriod? }
+        // Map to { type, count, percentage, trend }
+        const VIOLATION_CODE_TO_ENUM_VALUE: Record<string, ViolationType> = {
+          WRONG_SIDE_DRIVING: ViolationType.WRONG_SIDE_DRIVING,
+          NO_PARKING_ZONE: ViolationType.NO_PARKING_ZONE,
+          SIGNAL_JUMPING: ViolationType.SIGNAL_JUMPING,
+          SPEED_VIOLATION: ViolationType.SPEED_VIOLATION,
+          HELMET_SEATBELT_VIOLATION: ViolationType.HELMET_SEATBELT_VIOLATION,
+          MOBILE_PHONE_USAGE: ViolationType.MOBILE_PHONE_USAGE,
+          LANE_CUTTING: ViolationType.LANE_CUTTING,
+          DRUNK_DRIVING_SUSPECTED: ViolationType.DRUNK_DRIVING_SUSPECTED,
+          OTHERS: ViolationType.OTHERS,
+        };
+
+        const mapped = (response.data as any[]).map(item => ({
+          type: VIOLATION_CODE_TO_ENUM_VALUE[item.violationType] ?? ViolationType.OTHERS,
+          count: item.count ?? 0,
+          percentage: item.percentage ?? 0,
+          trend: item.trend ?? 'stable',
+        }));
+        return mapped;
       } else {
         throw new Error(response.message || 'Failed to fetch violation type stats');
       }
@@ -64,7 +102,27 @@ export const fetchGeographicStats = createAsyncThunk(
       const response = await apiService.get('/police/dashboard/geographic', filter);
       
       if (response.success && response.data) {
-        return response.data;
+        // Normalize violationTypes to our ViolationType enum values if backend sends codes
+        const CODE_TO_ENUM_VALUE: Record<string, ViolationType> = {
+          WRONG_SIDE_DRIVING: ViolationType.WRONG_SIDE_DRIVING,
+          NO_PARKING_ZONE: ViolationType.NO_PARKING_ZONE,
+          SIGNAL_JUMPING: ViolationType.SIGNAL_JUMPING,
+          SPEED_VIOLATION: ViolationType.SPEED_VIOLATION,
+          HELMET_SEATBELT_VIOLATION: ViolationType.HELMET_SEATBELT_VIOLATION,
+          MOBILE_PHONE_USAGE: ViolationType.MOBILE_PHONE_USAGE,
+          LANE_CUTTING: ViolationType.LANE_CUTTING,
+          DRUNK_DRIVING_SUSPECTED: ViolationType.DRUNK_DRIVING_SUSPECTED,
+          OTHERS: ViolationType.OTHERS,
+        };
+
+        const mapped = (response.data as any[]).map((geo) => ({
+          ...geo,
+          hotspots: (geo.hotspots || []).map((h: any) => ({
+            ...h,
+            violationTypes: (h.violationTypes || []).map((t: string) => CODE_TO_ENUM_VALUE[t] ?? t),
+          })),
+        }));
+        return mapped;
       } else {
         throw new Error(response.message || 'Failed to fetch geographic stats');
       }
@@ -82,7 +140,27 @@ export const fetchOfficerPerformance = createAsyncThunk(
       const response = await apiService.get('/police/dashboard/officer-performance', filter);
       
       if (response.success && response.data) {
-        return response.data;
+        // Backend now includes: processed, approved, rejected, averageProcessingTime, challansIssued
+        // Map to chart-friendly shape expected by OfficerPerformanceChart
+        const mapped = (response.data as any[]).map(item => {
+          const processed = item.processed ?? item.reportsProcessed ?? 0;
+          const approved = item.approved ?? 0;
+          const rejected = item.rejected ?? 0;
+          const approvalRate = processed > 0 ? approved / processed : 0;
+          const accuracyBase = approved + rejected;
+          const accuracyRate = accuracyBase > 0 ? approved / accuracyBase : approvalRate;
+          return {
+            officerId: item.officerId ?? item.id ?? '',
+            officerName: item.officerName ?? item.name ?? 'Officer',
+            badgeNumber: item.badgeNumber ?? item.badge ?? '',
+            reportsProcessed: processed,
+            averageProcessingTime: item.averageProcessingTime ?? 0,
+            approvalRate,
+            accuracyRate,
+            challansIssued: item.challansIssued ?? 0,
+          };
+        });
+        return mapped;
       } else {
         throw new Error(response.message || 'Failed to fetch officer performance stats');
       }

@@ -74,6 +74,9 @@ export interface ViolationReportUpdate {
 export interface ViolationReportFilter {
   status?: ReportStatus[];
   violationType?: ViolationType[];
+  // When multiple violation types are provided, specify how they should be matched
+  // 'any' => union (OR), 'all' => intersection (AND)
+  violationTypeMode?: 'any' | 'all';
   severity?: SeverityLevel[];
   dateRange?: {
     start: Date;

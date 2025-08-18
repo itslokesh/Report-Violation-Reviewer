@@ -255,35 +255,7 @@ const challansSlice = createSlice({
         state.error = action.payload as string;
       });
 
-    // Calculate fine
-    builder
-      .addCase(calculateFine.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(calculateFine.fulfilled, (state, action: PayloadAction<any>) => {
-        state.isLoading = false;
-        state.fineCalculation = action.payload;
-      })
-      .addCase(calculateFine.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string;
-      });
-
-    // Lookup vehicle
-    builder
-      .addCase(lookupVehicle.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(lookupVehicle.fulfilled, (state, action: PayloadAction<any>) => {
-        state.isLoading = false;
-        state.vehicleInfo = action.payload;
-      })
-      .addCase(lookupVehicle.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string;
-      });
+    // Note: removed calculateFine and lookupVehicle handlers for prototype since thunks are not implemented
   },
 });
 

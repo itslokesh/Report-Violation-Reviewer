@@ -6,13 +6,56 @@ import { WebApiService } from '../../web/services/WebApiService';
 // Async thunks
 export const fetchReports = createAsyncThunk(
   'reports/fetchReports',
-  async (params?: ViolationReportFilter & { page?: number; limit?: number }, { rejectWithValue }) => {
+  async (params?: ViolationReportFilter & { page?: number; limit?: number; sortBy?: string; sortOrder?: 'asc' | 'desc' }, { rejectWithValue }) => {
     try {
       const apiService = new WebApiService();
-      const response = await apiService.get('/police/reports', params);
+      // Normalize filter params to backend expectations
+      const queryParams: Record<string, any> = { ...(params || {}) };
+      if (queryParams && Array.isArray((queryParams as any).violationType)) {
+        const selected = (queryParams as any).violationType as string[];
+        if (selected.length <= 1) {
+          // Backward-compatible single type
+          (queryParams as any).violationType = selected[0] ?? undefined;
+          delete (queryParams as any).violationTypes;
+          if (selected.length === 0) delete (queryParams as any).violationType;
+        } else {
+          // Multiple: send as violationTypes and include mode=any
+          delete (queryParams as any).violationType;
+          (queryParams as any).violationTypes = selected;
+          if (!(queryParams as any).violationTypeMode) {
+            (queryParams as any).violationTypeMode = 'any';
+          }
+        }
+      }
+
+      if (queryParams && Array.isArray((queryParams as any).status)) {
+        const selectedStatuses = (queryParams as any).status as string[];
+        if (selectedStatuses.length <= 1) {
+          // Single status for backward compatibility
+          (queryParams as any).status = selectedStatuses[0] ?? undefined;
+          delete (queryParams as any).statuses;
+          if (selectedStatuses.length === 0) delete (queryParams as any).status;
+        } else {
+          // Multiple statuses: send as statuses[]=... and rely on default union (any)
+          delete (queryParams as any).status;
+          (queryParams as any).statuses = selectedStatuses;
+          // Optional: (queryParams as any).statusMode = 'any'; // backend defaults to any
+        }
+      }
+
+      const response = await apiService.get('/police/reports', queryParams);
       
       if (response.success && response.data) {
-        return response.data;
+        // Backend shape: { reports: ViolationReport[], pagination: { page, limit, total, pages } }
+        const backendData: any = response.data;
+        const paginated = {
+          data: backendData.reports ?? [],
+          total: backendData.pagination?.total ?? (backendData.reports?.length ?? 0),
+          page: backendData.pagination?.page ?? (params?.page ?? 1),
+          limit: backendData.pagination?.limit ?? (params?.limit ?? 20),
+          totalPages: backendData.pagination?.pages ?? 1,
+        } as PaginatedResponse<ViolationReport>;
+        return paginated;
       } else {
         throw new Error(response.message || 'Failed to fetch reports');
       }
@@ -154,6 +197,8 @@ interface ReportsState {
     limit: number;
     total: number;
     totalPages: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   };
   filters: ViolationReportFilter | null;
   isLoading: boolean;
@@ -172,6 +217,8 @@ const initialState: ReportsState = {
     limit: 20,
     total: 0,
     totalPages: 0,
+    sortBy: 'timestamp',
+    sortOrder: 'desc',
   },
   filters: null,
   isLoading: false,
@@ -219,6 +266,11 @@ const reportsSlice = createSlice({
       state.pagination.limit = action.payload;
       state.pagination.page = 1; // Reset to first page when limit changes
     },
+    setSort: (state, action: PayloadAction<{ sortBy: string; sortOrder: 'asc' | 'desc' }>) => {
+      state.pagination.sortBy = action.payload.sortBy;
+      state.pagination.sortOrder = action.payload.sortOrder;
+      state.pagination.page = 1; // Reset page when sort changes
+    },
     // Note: Bulk selection functionality removed as bulk operations are not needed
     updateReportOptimistically: (state, action: PayloadAction<{ id: number; updates: Partial<ViolationReport> }>) => {
       const { id, updates } = action.payload;
@@ -247,6 +299,8 @@ const reportsSlice = createSlice({
           limit: action.payload.limit,
           total: action.payload.total,
           totalPages: action.payload.totalPages,
+          sortBy: state.pagination.sortBy,
+          sortOrder: state.pagination.sortOrder,
         };
       })
       .addCase(fetchReports.rejected, (state, action) => {
@@ -354,6 +408,7 @@ export const {
   clearFilters,
   setPage,
   setLimit,
+  setSort,
   updateReportOptimistically,
 } = reportsSlice.actions;
 
