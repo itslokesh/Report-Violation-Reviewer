@@ -1,4 +1,4 @@
-import { BaseAuthService, AuthResponse } from '../../shared/services/auth';
+import { BaseAuthService, AuthResponse, LoginCredentials } from '../../shared/services/auth';
 import { User, PoliceOfficer } from '../../shared/models/user';
 import { WebApiService } from './WebApiService';
 import { STORAGE_KEYS } from '../../shared/constants/app';
@@ -74,7 +74,13 @@ export class WebAuthService extends BaseAuthService {
   }
 
   async clearAllData(): Promise<void> {
-    await this.clearAuthData();
+    // Base method is private; emulate by clearing pieces
+    await Promise.all([
+      this.removeToken(),
+      this.removeRefreshToken(),
+      this.removeUser(),
+    ]);
+    this.apiService.removeAuthToken();
     // Clear other app data if needed
     localStorage.removeItem(STORAGE_KEYS.userPreferences);
     localStorage.removeItem(STORAGE_KEYS.offlineData);
@@ -149,28 +155,19 @@ export class WebAuthService extends BaseAuthService {
       if (response.success && response.data) {
         // Transform backend response to match our AuthResponse interface
         const authResponse: AuthResponse = {
-          user: {
-            id: response.data.user.id,
-            name: response.data.user.name,
-            email: response.data.user.email,
-            phoneNumber: response.data.user.phoneNumber || '',
-            badgeNumber: response.data.user.badgeNumber,
-            rank: response.data.user.rank || 'Officer',
-            department: response.data.user.department,
-            jurisdiction: response.data.user.city || response.data.user.district || '',
-            role: response.data.user.role,
-            permissions: ['READ', 'WRITE', 'DELETE', 'APPROVE', 'REJECT'], // Default permissions
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            lastLoginAt: new Date()
-          },
-          token: response.data.accessToken,
-          refreshToken: response.data.refreshToken,
+          user: response.data.user,
+          token: (response.data as any).accessToken || response.data.token,
+          refreshToken: (response.data as any).refreshToken || '',
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
         };
 
-        await this.setAuthData(authResponse);
+        // Base method is private; set token/header and persist via exposed methods
+        await Promise.all([
+          this.saveToken(authResponse.token),
+          this.saveRefreshToken(authResponse.refreshToken),
+          this.saveUser(authResponse.user),
+        ]);
+        this.apiService.setAuthToken(authResponse.token);
         return authResponse;
       } else {
         throw new Error(response.message || 'Login failed');

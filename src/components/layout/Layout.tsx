@@ -55,9 +55,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const dispatch = useAppDispatch();
   
   const { user } = useAppSelector(state => state.auth);
-  const { notifications, markAsRead } = useNotification();
-  
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const { notifications, unreadCount, markAsRead } = useNotification();
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
@@ -132,7 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 },
               }}
             >
-              <ListItemIcon sx={{ color: location.pathname === item.path ? 'primary.main' : 'inherit' }}>
+              <ListItemIcon sx={{ color: location.pathname === item.path ? (theme.palette as any).primary.main : 'inherit' }}>
                 {item.icon}
               </ListItemIcon>
               <ListItemText primary={item.text} />
@@ -217,13 +215,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 handleNotificationMenuClose();
               }}
               sx={{
-                backgroundColor: notification.isRead ? 'inherit' : 'action.hover',
+                backgroundColor: 'inherit',
                 borderBottom: '1px solid',
                 borderColor: 'divider'
               }}
             >
               <Box>
-                <Typography variant="body2" fontWeight={notification.isRead ? 'normal' : 'bold'}>
+                <Typography variant="body2" fontWeight={'normal'}>
                   {notification.title}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">

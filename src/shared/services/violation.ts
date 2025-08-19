@@ -20,25 +20,31 @@ export class ViolationService extends BaseRepository<
   // Business logic methods that can be shared between platforms
   async getPendingReports(params?: ViolationReportFilter): Promise<ViolationReport[]> {
     const response = await this.getAll({
-      ...params,
+      page: 1,
+      limit: 20,
+      ...(params || {}),
       status: [ReportStatus.PENDING]
-    });
+    } as any);
     return response.data;
   }
 
   async getReportsBySeverity(severity: SeverityLevel, params?: ViolationReportFilter): Promise<ViolationReport[]> {
     const response = await this.getAll({
-      ...params,
+      page: 1,
+      limit: 20,
+      ...(params || {}),
       severity: [severity]
-    });
+    } as any);
     return response.data;
   }
 
   async getReportsByViolationType(type: ViolationType, params?: ViolationReportFilter): Promise<ViolationReport[]> {
     const response = await this.getAll({
-      ...params,
+      page: 1,
+      limit: 20,
+      ...(params || {}),
       violationType: [type]
-    });
+    } as any);
     return response.data;
   }
 
@@ -96,8 +102,10 @@ export class ViolationService extends BaseRepository<
 
   async getReportsByVehicle(vehicleNumber: string): Promise<ViolationReport[]> {
     const response = await this.getAll({
+      page: 1,
+      limit: 20,
       searchTerm: vehicleNumber
-    });
+    } as any);
     return response.data.filter(report => 
       report.vehicleNumber?.toLowerCase().includes(vehicleNumber.toLowerCase())
     );
@@ -105,15 +113,19 @@ export class ViolationService extends BaseRepository<
 
   async getReportsByReporter(reporterId: string): Promise<ViolationReport[]> {
     const response = await this.getAll({
+      page: 1,
+      limit: 20,
       reporterId
-    });
+    } as any);
     return response.data;
   }
 
   async getReportsByReviewer(reviewerId: string): Promise<ViolationReport[]> {
     const response = await this.getAll({
+      page: 1,
+      limit: 20,
       reviewerId
-    });
+    } as any);
     return response.data;
   }
 

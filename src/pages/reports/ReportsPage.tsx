@@ -18,7 +18,7 @@ import {
   clearFilters
 } from '../../store/slices/reportsSlice';
 import { useNavigate } from 'react-router-dom';
-import { formatViolationType } from '../../shared/utils/formatting';
+import { formatViolationType, formatReportStatus } from '../../shared/utils/formatting';
 import { ReportStatus } from '../../shared/models/common';
 
 const ReportsPage: React.FC = () => {
@@ -201,7 +201,7 @@ const ReportsPage: React.FC = () => {
                     <TableCell>#{report.id}</TableCell>
                     <TableCell>{formatViolationType((report as any).violationType)}</TableCell>
                     <TableCell>{report.vehicleNumber || '-'}</TableCell>
-                    <TableCell>{String(report.status)}</TableCell>
+                    <TableCell>{formatReportStatus(String(report.status))}</TableCell>
                     <TableCell>{new Date(report.timestamp).toLocaleString()}</TableCell>
                   </TableRow>
                 ))

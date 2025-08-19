@@ -1,59 +1,58 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
-import { APP_CONFIG } from '../../shared/constants/app';
 
 // Color palette for police admin platform
 const colors = {
   primary: {
-    main: '#1976d2', // Professional blue
-    light: '#42a5f5',
-    dark: '#1565c0',
+    main: '#0B3D91', // Deep police navy
+    light: '#1E5BC6',
+    dark: '#082C6C',
     contrastText: '#ffffff',
   },
   secondary: {
-    main: '#dc004e', // Alert/action red
-    light: '#ff5983',
-    dark: '#9a0036',
+    main: '#B8860B', // Brass/gold accent
+    light: '#D4A72C',
+    dark: '#8A6508',
     contrastText: '#ffffff',
   },
   success: {
-    main: '#2e7d32', // Green for approved/positive actions
-    light: '#4caf50',
-    dark: '#1b5e20',
+    main: '#1B5E20',
+    light: '#43A047',
+    dark: '#104116',
   },
   warning: {
-    main: '#ed6c02', // Orange for warnings
-    light: '#ff9800',
-    dark: '#e65100',
+    main: '#B26A00',
+    light: '#D97706',
+    dark: '#7C4A00',
   },
   error: {
-    main: '#d32f2f', // Red for errors/rejections
-    light: '#ef5350',
-    dark: '#c62828',
+    main: '#B71C1C',
+    light: '#E53935',
+    dark: '#7F1313',
   },
   info: {
-    main: '#0288d1', // Blue for information
-    light: '#03a9f4',
-    dark: '#01579b',
+    main: '#2A9FD6',
+    light: '#48B2E1',
+    dark: '#1D6F94',
   },
   grey: {
-    50: '#fafafa',
-    100: '#f5f5f5',
-    200: '#eeeeee',
-    300: '#e0e0e0',
-    400: '#bdbdbd',
-    500: '#9e9e9e',
-    600: '#757575',
-    700: '#616161',
-    800: '#424242',
-    900: '#212121',
+    50: '#f8fafc',
+    100: '#f1f5f9',
+    200: '#e2e8f0',
+    300: '#cbd5e1',
+    400: '#94a3b8',
+    500: '#64748b',
+    600: '#475569',
+    700: '#334155',
+    800: '#1f2937',
+    900: '#0f172a',
   },
   background: {
-    default: '#f5f5f5',
+    default: '#f8fafc',
     paper: '#ffffff',
   },
   text: {
-    primary: '#212121',
-    secondary: '#757575',
+    primary: '#0f172a',
+    secondary: '#475569',
   },
 };
 
@@ -130,7 +129,7 @@ const typography = {
 };
 
 // Component overrides
-const components = {
+const components: ThemeOptions['components'] = {
   MuiCssBaseline: {
     styleOverrides: {
       body: {
@@ -175,11 +174,6 @@ const components = {
         textTransform: 'none',
         fontWeight: 500,
         boxShadow: 'none',
-        '&:hover': {
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        },
-      },
-      contained: {
         '&:hover': {
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         },

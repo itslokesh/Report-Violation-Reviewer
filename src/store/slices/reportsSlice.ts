@@ -6,7 +6,7 @@ import { WebApiService } from '../../web/services/WebApiService';
 // Async thunks
 export const fetchReports = createAsyncThunk(
   'reports/fetchReports',
-  async (params?: ViolationReportFilter & { page?: number; limit?: number; sortBy?: string; sortOrder?: 'asc' | 'desc' }, { rejectWithValue }) => {
+  async (params: (ViolationReportFilter & { page?: number; limit?: number; sortBy?: string; sortOrder?: 'asc' | 'desc' }) | undefined, thunkApi) => {
     try {
       const apiService = new WebApiService();
       // Normalize filter params to backend expectations
@@ -60,14 +60,14 @@ export const fetchReports = createAsyncThunk(
         throw new Error(response.message || 'Failed to fetch reports');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch reports: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch reports: ${(error as Error).message}`);
     }
   }
 );
 
 export const fetchReportById = createAsyncThunk(
   'reports/fetchReportById',
-  async (id: number, { rejectWithValue }) => {
+  async (id: number, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get(`/police/reports/${id}`);
@@ -78,14 +78,14 @@ export const fetchReportById = createAsyncThunk(
         throw new Error(response.message || 'Failed to fetch report');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch report: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch report: ${(error as Error).message}`);
     }
   }
 );
 
 export const updateReport = createAsyncThunk(
   'reports/updateReport',
-  async ({ id, updateData }: { id: number; updateData: ViolationReportUpdate }, { rejectWithValue }) => {
+  async ({ id, updateData }: { id: number; updateData: ViolationReportUpdate }, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/reports/${id}`, updateData);
@@ -96,19 +96,23 @@ export const updateReport = createAsyncThunk(
         throw new Error(response.message || 'Failed to update report');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to update report: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to update report: ${(error as Error).message}`);
     }
   }
 );
 
 export const approveReport = createAsyncThunk(
   'reports/approveReport',
-  async ({ id, reviewNotes, challanNumber }: { id: number; reviewNotes?: string; challanNumber?: string }, { rejectWithValue }) => {
+  async (
+    { id, reviewNotes, challanNumber, approvedViolationTypes }: { id: number; reviewNotes?: string; challanNumber?: string; approvedViolationTypes?: string[] },
+    thunkApi
+  ) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/reports/${id}/status`, {
         status: 'APPROVED',
         reviewNotes,
+        approvedViolationTypes,
         challanIssued: true,
         challanNumber
       });
@@ -119,14 +123,14 @@ export const approveReport = createAsyncThunk(
         throw new Error(response.message || 'Failed to approve report');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to approve report: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to approve report: ${(error as Error).message}`);
     }
   }
 );
 
 export const rejectReport = createAsyncThunk(
   'reports/rejectReport',
-  async ({ id, reviewNotes }: { id: number; reviewNotes: string }, { rejectWithValue }) => {
+  async ({ id, reviewNotes }: { id: number; reviewNotes: string }, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/reports/${id}/status`, {
@@ -140,14 +144,65 @@ export const rejectReport = createAsyncThunk(
         throw new Error(response.message || 'Failed to reject report');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to reject report: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to reject report: ${(error as Error).message}`);
+    }
+  }
+);
+
+// Report events (audit trail)
+export interface ReportEvent {
+  id: string | number;
+  reportId: number;
+  type: string;
+  title?: string | null;
+  description?: string | null;
+  metadata?: string | null; // backend returns JSON string
+  createdAt: string;
+  citizenId?: string | null;
+  userId?: string | null;
+}
+
+export const fetchReportEvents = createAsyncThunk(
+  'reports/fetchReportEvents',
+  async (id: number, thunkApi) => {
+    try {
+      const apiService = new WebApiService();
+      const response = await apiService.get(`/police/reports/${id}/events`);
+      if (response.success && response.data) {
+        return { id, events: (response.data as any[]) as ReportEvent[] };
+      } else {
+        throw new Error(response.message || 'Failed to fetch report events');
+      }
+    } catch (error) {
+      return thunkApi.rejectWithValue(`Failed to fetch report events: ${(error as Error).message}`);
+    }
+  }
+);
+
+// Set report status to UNDER_REVIEW when an officer opens the detail page
+export const startReviewReport = createAsyncThunk(
+  'reports/startReviewReport',
+  async (id: number, thunkApi) => {
+    try {
+      const apiService = new WebApiService();
+      const response = await apiService.put(`/police/reports/${id}/status`, {
+        status: 'UNDER_REVIEW',
+        reviewNotes: 'Investigating',
+      });
+      if (response.success && response.data) {
+        return response.data as ViolationReport;
+      } else {
+        throw new Error(response.message || 'Failed to set report under review');
+      }
+    } catch (error) {
+      return thunkApi.rejectWithValue(`Failed to set report under review: ${(error as Error).message}`);
     }
   }
 );
 
 export const markAsDuplicate = createAsyncThunk(
   'reports/markAsDuplicate',
-  async ({ id, duplicateGroupId, confidenceScore }: { id: number; duplicateGroupId: string; confidenceScore: number }, { rejectWithValue }) => {
+  async ({ id, duplicateGroupId, confidenceScore }: { id: number; duplicateGroupId: string; confidenceScore: number }, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/reports/${id}/status`, {
@@ -162,14 +217,14 @@ export const markAsDuplicate = createAsyncThunk(
         throw new Error(response.message || 'Failed to mark report as duplicate');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to mark report as duplicate: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to mark report as duplicate: ${(error as Error).message}`);
     }
   }
 );
 
 export const fetchPendingReports = createAsyncThunk(
   'reports/fetchPendingReports',
-  async (params?: ViolationReportFilter, { rejectWithValue }) => {
+  async (params: ViolationReportFilter | undefined, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get('/police/reports', { ...params, status: 'PENDING' });
@@ -180,7 +235,51 @@ export const fetchPendingReports = createAsyncThunk(
         throw new Error(response.message || 'Failed to fetch pending reports');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch pending reports: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch pending reports: ${(error as Error).message}`);
+    }
+  }
+);
+
+// Comments (police notes)
+export interface ReportComment {
+  id: string | number;
+  reportId: number;
+  authorName: string | null;
+  message: string;
+  isInternal?: boolean;
+  createdAt: string;
+}
+
+export const fetchReportComments = createAsyncThunk(
+  'reports/fetchReportComments',
+  async (id: number, thunkApi) => {
+    try {
+      const apiService = new WebApiService();
+      const response = await apiService.get(`/police/reports/${id}/comments`);
+      if (response.success && response.data) {
+        return { id, comments: (response.data as any[]) as ReportComment[] };
+      } else {
+        throw new Error(response.message || 'Failed to fetch report comments');
+      }
+    } catch (error) {
+      return thunkApi.rejectWithValue(`Failed to fetch report comments: ${(error as Error).message}`);
+    }
+  }
+);
+
+export const addReportComment = createAsyncThunk(
+  'reports/addReportComment',
+  async ({ id, message, isInternal }: { id: number; message: string; isInternal?: boolean }, thunkApi) => {
+    try {
+      const apiService = new WebApiService();
+      const response = await apiService.post(`/police/reports/${id}/comments`, { message, isInternal });
+      if (response.success && response.data) {
+        return { id, comment: response.data as unknown as ReportComment };
+      } else {
+        throw new Error(response.message || 'Failed to add comment');
+      }
+    } catch (error) {
+      return thunkApi.rejectWithValue(`Failed to add comment: ${(error as Error).message}`);
     }
   }
 );
@@ -192,6 +291,8 @@ interface ReportsState {
   entities: Record<number, ViolationReport>;
   ids: number[];
   currentReport: ViolationReport | null;
+  eventsByReportId: Record<number, ReportEvent[]>;
+  commentsByReportId: Record<number, ReportComment[]>;
   pagination: {
     page: number;
     limit: number;
@@ -212,6 +313,8 @@ const initialState: ReportsState = {
   entities: {},
   ids: [],
   currentReport: null,
+  eventsByReportId: {},
+  commentsByReportId: {},
   pagination: {
     page: 1,
     limit: 20,
@@ -378,6 +481,37 @@ const reportsSlice = createSlice({
         state.error = action.payload as string;
       });
 
+    // Start review (UNDER_REVIEW)
+    builder
+      .addCase(startReviewReport.pending, (state) => {
+        state.isUpdating = true;
+        state.error = null;
+      })
+      .addCase(startReviewReport.fulfilled, (state, action: PayloadAction<ViolationReport>) => {
+        state.isUpdating = false;
+        const updated = action.payload;
+        state.entities[updated.id] = { ...(state.entities[updated.id] || {}), ...updated } as ViolationReport;
+        if (state.currentReport?.id === updated.id) {
+          state.currentReport = { ...state.currentReport, ...updated } as ViolationReport;
+        }
+      })
+      .addCase(startReviewReport.rejected, (state, action) => {
+        state.isUpdating = false;
+        state.error = action.payload as string;
+      });
+
+    // Fetch report events
+    builder
+      .addCase(fetchReportEvents.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(fetchReportEvents.fulfilled, (state, action: PayloadAction<{ id: number; events: ReportEvent[] }>) => {
+        state.eventsByReportId[action.payload.id] = action.payload.events;
+      })
+      .addCase(fetchReportEvents.rejected, (state, action) => {
+        state.error = action.payload as string;
+      });
+
     // Mark as duplicate
     builder
       .addCase(markAsDuplicate.pending, (state) => {
@@ -397,6 +531,16 @@ const reportsSlice = createSlice({
       });
 
     // Note: Bulk update reducers removed as bulk operations are not needed
+
+    // Comments
+    builder
+      .addCase(fetchReportComments.fulfilled, (state, action: PayloadAction<{ id: number; comments: ReportComment[] }>) => {
+        state.commentsByReportId[action.payload.id] = action.payload.comments;
+      })
+      .addCase(addReportComment.fulfilled, (state, action: PayloadAction<{ id: number; comment: ReportComment }>) => {
+        const list = state.commentsByReportId[action.payload.id] || [];
+        state.commentsByReportId[action.payload.id] = [...list, action.payload.comment];
+      });
   },
 });
 
@@ -436,6 +580,12 @@ export const selectReportsUpdating = (state: { reports: ReportsState }) =>
 
 export const selectReportsError = (state: { reports: ReportsState }) => 
   state.reports.error;
+
+export const selectReportEvents = (state: { reports: ReportsState }, id: number) => 
+  state.reports.eventsByReportId[id] || [];
+
+export const selectReportComments = (state: { reports: ReportsState }, id: number) =>
+  state.reports.commentsByReportId[id] || [];
 
 // Note: Bulk selection selectors removed as bulk operations are not needed
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Paper, Grid, Card, CardContent } from '@mui/material';
+import { Box, Typography, Grid, Card, CardContent } from '@mui/material';
 
 const AnalyticsPage: React.FC = () => {
   return (

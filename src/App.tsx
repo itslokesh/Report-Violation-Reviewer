@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
+import { Box } from '@mui/material';
 
 import { useAppDispatch, useAppSelector } from './store';
 import { checkAuth } from './store/slices/authSlice';
@@ -49,7 +49,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const App: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { isLoading, isAuthenticated } = useAppSelector(state => state.auth);
+  const { isLoading } = useAppSelector(state => state.auth);
   const { showNotification } = useNotification();
 
 

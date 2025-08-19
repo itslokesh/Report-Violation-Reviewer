@@ -3,9 +3,10 @@
 export * from './api';
 export * from './auth';
 export * from './violation';
-export * from './user';
-export * from './vehicle';
-export * from './challan';
-export * from './dashboard';
-export * from './storage';
-export * from './notification';
+// The following specific services are not implemented in this codebase yet
+// export * from './user';
+// export * from './vehicle';
+// export * from './challan';
+// export * from './dashboard';
+// export * from './storage';
+// export * from './notification';

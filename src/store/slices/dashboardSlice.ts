@@ -6,7 +6,7 @@ import { WebApiService } from '../../web/services/WebApiService';
 // Async thunks
 export const fetchDashboardStats = createAsyncThunk(
   'dashboard/fetchStats',
-  async (filter?: AnalyticsFilter, { rejectWithValue }) => {
+  async (filter: AnalyticsFilter | undefined, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get('/police/dashboard', filter);
@@ -51,14 +51,14 @@ export const fetchDashboardStats = createAsyncThunk(
         throw new Error(response.message || 'Failed to fetch dashboard stats');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch dashboard stats: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch dashboard stats: ${(error as Error).message}`);
     }
   }
 );
 
 export const fetchViolationTypeStats = createAsyncThunk(
   'dashboard/fetchViolationTypeStats',
-  async (filter?: AnalyticsFilter, { rejectWithValue }) => {
+  async (filter: AnalyticsFilter | undefined, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get('/police/dashboard/violation-types', filter);
@@ -89,17 +89,18 @@ export const fetchViolationTypeStats = createAsyncThunk(
         throw new Error(response.message || 'Failed to fetch violation type stats');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch violation type stats: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch violation type stats: ${(error as Error).message}`);
     }
   }
 );
 
 export const fetchGeographicStats = createAsyncThunk(
   'dashboard/fetchGeographicStats',
-  async (filter?: AnalyticsFilter, { rejectWithValue }) => {
+  async (filter: AnalyticsFilter | undefined, thunkApi) => {
     try {
       const apiService = new WebApiService();
-      const response = await apiService.get('/police/dashboard/geographic', filter);
+      const params = { ...(filter || {}), includeAllHotspots: true } as Record<string, any>;
+      const response = await apiService.get('/police/dashboard/geographic', params);
       
       if (response.success && response.data) {
         // Normalize violationTypes to our ViolationType enum values if backend sends codes
@@ -115,26 +116,37 @@ export const fetchGeographicStats = createAsyncThunk(
           OTHERS: ViolationType.OTHERS,
         };
 
+        const normalizeHotspot = (h: any) => {
+          const lat = Number(h.latitude ?? h.lat ?? h.latitute ?? h.y ?? 0);
+          const lng = Number(h.longitude ?? h.lng ?? h.lon ?? h.x ?? 0);
+          const address = h.address ?? h.location ?? h.name ?? h.label ?? 'Location';
+          const violationCount = Number(h.violationCount ?? h.count ?? h.reports ?? 1);
+          const violationTypes = (h.violationTypes || h.types || h.tags || [])
+            .map((t: string) => CODE_TO_ENUM_VALUE[t] ?? t);
+          return { latitude: lat, longitude: lng, address, violationCount, violationTypes };
+        };
+
         const mapped = (response.data as any[]).map((geo) => ({
-          ...geo,
-          hotspots: (geo.hotspots || []).map((h: any) => ({
-            ...h,
-            violationTypes: (h.violationTypes || []).map((t: string) => CODE_TO_ENUM_VALUE[t] ?? t),
-          })),
+          city: geo.city ?? geo.name ?? geo.region ?? 'Area',
+          district: geo.district ?? geo.subregion ?? '',
+          reports: Number(geo.reports ?? geo.count ?? 0),
+          approved: Number(geo.approved ?? 0),
+          rejected: Number(geo.rejected ?? 0),
+          hotspots: ((geo.hotspots ?? geo.points ?? geo.locations ?? []) as any[]).map(normalizeHotspot),
         }));
         return mapped;
       } else {
         throw new Error(response.message || 'Failed to fetch geographic stats');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch geographic stats: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch geographic stats: ${(error as Error).message}`);
     }
   }
 );
 
 export const fetchOfficerPerformance = createAsyncThunk(
   'dashboard/fetchOfficerPerformance',
-  async (filter?: AnalyticsFilter, { rejectWithValue }) => {
+  async (filter: AnalyticsFilter | undefined, thunkApi) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get('/police/dashboard/officer-performance', filter);
@@ -165,7 +177,7 @@ export const fetchOfficerPerformance = createAsyncThunk(
         throw new Error(response.message || 'Failed to fetch officer performance stats');
       }
     } catch (error) {
-      return rejectWithValue(`Failed to fetch officer performance stats: ${(error as Error).message}`);
+      return thunkApi.rejectWithValue(`Failed to fetch officer performance stats: ${(error as Error).message}`);
     }
   }
 );

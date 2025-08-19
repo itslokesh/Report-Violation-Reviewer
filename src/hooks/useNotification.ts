@@ -10,7 +10,7 @@ export const useNotificationCount = () => {
 export const useNotificationFilter = (type?: string) => {
   const { notifications } = useNotification();
   if (type) {
-    return notifications.filter(notification => notification.type === type);
+    return notifications.filter((notification: any) => notification.type === type);
   }
   return notifications;
 };

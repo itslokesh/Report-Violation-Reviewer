@@ -67,7 +67,7 @@ const DashboardPage: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  const { stats, loading, error } = useAppSelector(state => state.dashboard);
+  const { stats, isLoading: loading, error } = useAppSelector(state => state.dashboard);
 
   const loadDashboardData = useCallback(async () => {
     try {

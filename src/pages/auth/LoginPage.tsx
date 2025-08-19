@@ -32,7 +32,7 @@ const LoginPage: React.FC = () => {
 
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { loading, error } = useAppSelector(state => state.auth);
+  const { isLoading, error } = useAppSelector(state => state.auth);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -159,7 +159,7 @@ const LoginPage: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                disabled={loading}
+                disabled={isLoading}
               />
 
               <TextField
@@ -183,14 +183,14 @@ const LoginPage: React.FC = () => {
                       <IconButton
                         onClick={handleTogglePasswordVisibility}
                         edge="end"
-                        disabled={loading}
+                        disabled={isLoading}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
                     </InputAdornment>
                   ),
                 }}
-                disabled={loading}
+                disabled={isLoading}
               />
 
               <Button
@@ -198,7 +198,7 @@ const LoginPage: React.FC = () => {
                 fullWidth
                 variant="contained"
                 size="large"
-                disabled={loading}
+                disabled={isLoading}
                 sx={{
                   mt: 3,
                   mb: 2,
@@ -207,7 +207,7 @@ const LoginPage: React.FC = () => {
                   fontWeight: 'bold'
                 }}
               >
-                {loading ? (
+                {isLoading ? (
                   <CircularProgress size={24} color="inherit" />
                 ) : (
                   'Sign In'

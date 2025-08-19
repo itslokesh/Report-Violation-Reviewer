@@ -7,7 +7,7 @@ export class WebApiService extends BaseApiService {
     super(baseUrl);
   }
 
-  protected async get<T>(url: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
+  public async get<T>(url: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
     try {
       const queryString = params ? this.buildQueryString(params) : '';
       const fullUrl = `${this.baseUrl}${url}${queryString}`;
@@ -24,7 +24,7 @@ export class WebApiService extends BaseApiService {
     }
   }
 
-  protected async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  public async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
     try {
       const response = await fetch(`${this.baseUrl}${url}`, {
         method: 'POST',
@@ -39,7 +39,7 @@ export class WebApiService extends BaseApiService {
     }
   }
 
-  protected async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  public async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
     try {
       const response = await fetch(`${this.baseUrl}${url}`, {
         method: 'PUT',
@@ -54,7 +54,7 @@ export class WebApiService extends BaseApiService {
     }
   }
 
-  protected async delete<T>(url: string): Promise<ApiResponse<T>> {
+  public async delete<T>(url: string): Promise<ApiResponse<T>> {
     try {
       const response = await fetch(`${this.baseUrl}${url}`, {
         method: 'DELETE',
@@ -68,7 +68,7 @@ export class WebApiService extends BaseApiService {
     }
   }
 
-  protected async upload<T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<ApiResponse<T>> {
+  public async upload<T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<ApiResponse<T>> {
     try {
       const formData = new FormData();
       formData.append('file', file);

@@ -141,7 +141,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, authServic
     try {
       const token = await authService.refreshAuthToken();
       // Update the auth service with new token
-      authService.setAuthToken(token);
+      (authService as any).apiService.setAuthToken(token);
       dispatch({ type: 'AUTH_UPDATE_ACTIVITY' });
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -208,7 +208,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, authServic
 
     // Set up session timeout
     const sessionTimeout = 30 * 60 * 1000; // 30 minutes
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const resetTimeout = () => {
       clearTimeout(timeoutId);

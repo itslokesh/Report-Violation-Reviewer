@@ -13,20 +13,20 @@ export abstract class BaseApiService {
     };
   }
 
-  protected setAuthToken(token: string): void {
+  public setAuthToken(token: string): void {
     this.headers['Authorization'] = `Bearer ${token}`;
   }
 
-  protected removeAuthToken(): void {
+  public removeAuthToken(): void {
     delete this.headers['Authorization'];
   }
 
   // Abstract methods to be implemented by platform-specific classes
-  protected abstract get<T>(url: string, params?: Record<string, any>): Promise<ApiResponse<T>>;
-  protected abstract post<T>(url: string, data?: any): Promise<ApiResponse<T>>;
-  protected abstract put<T>(url: string, data?: any): Promise<ApiResponse<T>>;
-  protected abstract delete<T>(url: string): Promise<ApiResponse<T>>;
-  protected abstract upload<T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<ApiResponse<T>>;
+  public abstract get<T>(url: string, params?: Record<string, any>): Promise<ApiResponse<T>>;
+  public abstract post<T>(url: string, data?: any): Promise<ApiResponse<T>>;
+  public abstract put<T>(url: string, data?: any): Promise<ApiResponse<T>>;
+  public abstract delete<T>(url: string): Promise<ApiResponse<T>>;
+  public abstract upload<T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<ApiResponse<T>>;
 }
 
 // Generic repository pattern for CRUD operations

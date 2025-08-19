@@ -1,14 +1,12 @@
 import React from 'react';
-import { Grid, Card, CardContent, Typography, Box, Chip } from '@mui/material';
+import { Grid, Card, CardContent, Typography, Box, useTheme } from '@mui/material';
 import { 
   TrendingUp, 
   TrendingDown, 
   Assignment, 
   CheckCircle, 
-  Cancel, 
   Schedule,
-  Speed,
-  LocationOn
+  Speed
 } from '@mui/icons-material';
 import { useAppSelector } from '../../store';
 import { selectDashboardStats } from '../../store/slices/dashboardSlice';
@@ -35,14 +33,15 @@ const StatCard: React.FC<StatCardProps> = ({
   trend, 
   color = 'primary' 
 }) => {
+  const theme = useTheme();
   const getColorValue = (color: string) => {
     switch (color) {
-      case 'success': return '#2e7d32';
-      case 'error': return '#d32f2f';
-      case 'warning': return '#ed6c02';
-      case 'info': return '#0288d1';
-      case 'secondary': return '#9c27b0';
-      default: return '#1976d2';
+      case 'success': return theme.palette.success.main;
+      case 'error': return theme.palette.error.main;
+      case 'warning': return theme.palette.warning.main;
+      case 'info': return theme.palette.info.main;
+      case 'secondary': return theme.palette.secondary.main;
+      default: return theme.palette.primary.main;
     }
   };
 
@@ -83,8 +82,8 @@ const StatCard: React.FC<StatCardProps> = ({
             sx={{ 
               p: 1, 
               borderRadius: 2, 
-              bgcolor: `${color}.light`, 
-              color: `${color}.main`,
+              bgcolor: (theme) => theme.palette[color as any]?.light || theme.palette.primary.light,
+              color: (theme) => theme.palette[color as any]?.main || theme.palette.primary.main,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -138,7 +137,6 @@ const DashboardStats: React.FC = () => {
   }
 
   const today = new Date();
-  const yesterday = DateUtils.subtractDays(today, 1);
 
   return (
     <Grid container spacing={3}>

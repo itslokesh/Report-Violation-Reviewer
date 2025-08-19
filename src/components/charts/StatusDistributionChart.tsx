@@ -12,7 +12,8 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  Chip
+  Chip,
+  useTheme
 } from '@mui/material';
 import {
   BarChart,
@@ -27,6 +28,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
+import { formatReportStatus } from '../../shared/utils/formatting';
 import { 
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
@@ -41,7 +43,7 @@ import {
 } from '@mui/icons-material';
 import { useAppSelector } from '../../store';
 import { selectDashboardStats } from '../../store/slices/dashboardSlice';
-import { ReportStatus } from '../../shared/models/common';
+import { getGridColor, getAxisTickColor } from '../../theme/chart';
 
 interface StatusDistributionChartProps {
   title?: string;
@@ -51,9 +53,10 @@ interface StatusDistributionChartProps {
 
 const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({ 
   title = "Report Status Distribution",
-  height = 400,
+  height = 380,
   showExport = true
 }) => {
+  const theme = useTheme();
   const [chartType, setChartType] = useState<'pie' | 'bar' | 'stacked'>('pie');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const { stats, loading } = useAppSelector(selectDashboardStats);
@@ -62,6 +65,7 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
     event: React.MouseEvent<HTMLElement>,
     newChartType: 'pie' | 'bar' | 'stacked' | null,
   ) => {
+    void event;
     if (newChartType !== null) {
       setChartType(newChartType);
     }
@@ -76,21 +80,39 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
   };
 
   const handleExport = (format: 'pdf' | 'png' | 'csv') => {
-    // TODO: Implement export functionality
     console.log(`Exporting status distribution data as ${format}`);
     handleExportMenuClose();
   };
 
   const getStatusColor = (status: string): string => {
+    // High-contrast fixed palette to avoid similar colors
     switch (status) {
-      case 'Pending': return '#ed6c02';
-      case 'Under Review': return '#1976d2';
-      case 'Approved': return '#2e7d32';
-      case 'Rejected': return '#d32f2f';
-      case 'Duplicate': return '#757575';
-      case 'Resolved': return '#388e3c';
-      default: return '#757575';
+      case 'Pending': return '#F59E0B';       // amber-500
+      case 'Under Review': return '#3B82F6';  // blue-500
+      case 'Approved': return '#10B981';      // emerald-500
+      case 'Rejected': return '#EF4444';      // red-500
+      case 'Duplicate': return '#6B7280';     // gray-500
+      case 'Resolved': return '#0EA5E9';      // sky-500
+      default: return '#9CA3AF';              // gray-400
     }
+  };
+
+  const normalizeStatus = (raw: string): string => {
+    if (!raw) return 'Pending';
+    const key = raw.toString().trim().toUpperCase().replace(/\s+/g, '_');
+    if (key.includes('PENDING')) return 'Pending';
+    if (key.includes('UNDER') && key.includes('REVIEW')) return 'Under Review';
+    if (key.includes('IN_REVIEW')) return 'Under Review';
+    if (key.includes('APPROVED') || key.includes('APPROVE')) return 'Approved';
+    if (key.includes('REJECTED') || key.includes('REJECT')) return 'Rejected';
+    if (key.includes('DUPLICATE') || key.includes('DUP')) return 'Duplicate';
+    if (key.includes('RESOLVED') || key.includes('CLOSED') || key.includes('COMPLETED')) return 'Resolved';
+    // Fallback: title-case the raw
+    return raw
+      .toLowerCase()
+      .split(/[_\s]+/)
+      .map(w => (w ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(' ');
   };
 
   const getStatusIcon = (status: string) => {
@@ -105,178 +127,67 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
     }
   };
 
-  const getStatusData = () => {
-    if (!stats) return [];
-    
-    // Mock data - replace with actual API data
-    const statusData = [
-      { status: 'Pending', count: stats.pendingReports || 0, percentage: 0 },
-      { status: 'Under Review', count: Math.round((stats.pendingReports || 0) * 0.3), percentage: 0 },
-      { status: 'Approved', count: stats.approvedToday || 0, percentage: 0 },
-      { status: 'Rejected', count: stats.rejectedToday || 0, percentage: 0 },
-      { status: 'Duplicate', count: Math.round((stats.totalReports || 0) * 0.05), percentage: 0 },
-      { status: 'Resolved', count: stats.processedToday || 0, percentage: 0 }
-    ];
-
-    const total = statusData.reduce((sum, item) => sum + item.count, 0);
-    
-    return statusData.map(item => ({
-      ...item,
-      percentage: total > 0 ? Math.round((item.count / total) * 100) : 0,
-      color: getStatusColor(item.status),
-      icon: getStatusIcon(item.status)
-    }));
-  };
-
-  const getWeeklyStatusData = () => {
-    if (!stats?.weeklyTrend) return [];
-    
-    return stats.weeklyTrend.map(week => ({
-      period: week.date || 'Week',
-      pending: week.pending || 0,
-      approved: week.approved || 0,
-      rejected: week.rejected || 0,
-      total: (week.pending || 0) + (week.approved || 0) + (week.rejected || 0)
-    }));
-  };
-
-  const statusData = getStatusData();
-  const weeklyData = getWeeklyStatusData();
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <Box
-          sx={{
-            bgcolor: 'background.paper',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 1,
-            p: 2,
-            boxShadow: 2
-          }}
-        >
-          <Typography variant="subtitle2" fontWeight="bold">
-            {label}
-          </Typography>
-          {payload.map((entry: any, index: number) => (
-            <Typography 
-              key={index}
-              variant="body2" 
-              color={entry.color}
-              sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-            >
-              <Box 
-                component="span" 
-                sx={{ 
-                  width: 12, 
-                  height: 12, 
-                  borderRadius: '50%', 
-                  bgcolor: entry.color,
-                  display: 'inline-block'
-                }} 
-              />
-              {entry.name}: {entry.value} ({entry.payload.percentage}%)
-            </Typography>
-          ))}
-        </Box>
-      );
+  const statusData = React.useMemo(() => {
+    type Row = { status: string; count: number; percentage: number; color: string; icon: JSX.Element };
+    if (!stats) return [] as Row[];
+    // Prefer backend-provided distribution if available
+    const backend = (stats as any).reportsByStatus as Record<string, number> | undefined;
+    let rows: Array<{ status: string; count: number }> = [];
+    if (backend && Object.keys(backend).length > 0) {
+      rows = Object.entries(backend).map(([k, v]) => ({ status: formatReportStatus(k), count: v ?? 0 }));
+    } else {
+      // Fallback approximation
+      rows = [
+        { status: 'Pending', count: stats.pendingReports || 0 },
+        { status: 'Approved', count: stats.approvedToday || 0 },
+        { status: 'Rejected', count: stats.rejectedToday || 0 },
+      ];
     }
-    return null;
-  };
+    // Optional: include Duplicate and Resolved if backend has them or infer small values
+    const hasDuplicate = rows.some(r => r.status.toLowerCase() === 'duplicate');
+    const hasResolved = rows.some(r => r.status.toLowerCase() === 'resolved');
+    if (!backend) {
+      if (!hasDuplicate) rows.push({ status: 'Duplicate', count: Math.round(((stats.totalReports || 0) * 5) / 100) });
+      if (!hasResolved) rows.push({ status: 'Resolved', count: stats.processedToday || 0 });
+    }
+    const total = rows.reduce((s, r) => s + r.count, 0) || 1;
+    return rows.map(r => ({
+      ...r,
+      percentage: Math.round((r.count / total) * 100),
+      color: getStatusColor(r.status),
+      icon: getStatusIcon(r.status)
+    })) as Row[];
+  }, [stats]);
 
-  const renderPieChart = () => (
-    <ResponsiveContainer width="100%" height={height - 100}>
-      <PieChart>
-        <Pie
-          data={statusData}
-          cx="50%"
-          cy="50%"
-          labelLine={false}
-          label={({ status, percentage }) => `${status} (${percentage}%)`}
-          outerRadius={80}
-          fill="#8884d8"
-          dataKey="count"
-        >
-          {statusData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.color} />
-          ))}
-        </Pie>
-        <Tooltip content={<CustomTooltip />} />
-        <Legend />
-      </PieChart>
-    </ResponsiveContainer>
-  );
+  const weeklyData = React.useMemo(() => {
+    if (!stats?.weeklyTrend) return [] as Array<{ period: string; pending: number; approved: number; rejected: number }>; 
+    return stats.weeklyTrend.map(w => ({
+      period: w.date || 'Week',
+      pending: w.pending || 0,
+      approved: w.approved || 0,
+      rejected: w.rejected || 0
+    }));
+  }, [stats]);
 
-  const renderBarChart = () => (
-    <ResponsiveContainer width="100%" height={height - 100}>
-      <BarChart data={statusData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis 
-          dataKey="status" 
-          angle={-45}
-          textAnchor="end"
-          height={80}
-          interval={0}
-          tick={{ fontSize: 12 }}
-        />
-        <YAxis />
-        <Tooltip content={<CustomTooltip />} />
-        <Bar dataKey="count" fill="#1976d2">
-          {statusData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.color} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-
-  const renderStackedBarChart = () => (
-    <ResponsiveContainer width="100%" height={height - 100}>
-      <BarChart data={weeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis 
-          dataKey="period" 
-          angle={-45}
-          textAnchor="end"
-          height={80}
-          interval={0}
-          tick={{ fontSize: 12 }}
-        />
-        <YAxis />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend />
-        <Bar dataKey="pending" stackId="a" fill="#ed6c02" name="Pending" />
-        <Bar dataKey="approved" stackId="a" fill="#2e7d32" name="Approved" />
-        <Bar dataKey="rejected" stackId="a" fill="#d32f2f" name="Rejected" />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-
-  const getTotalStats = () => {
-    const total = statusData.reduce((sum, item) => sum + item.count, 0);
-    const pending = statusData.find(item => item.status === 'Pending')?.count || 0;
-    const resolved = statusData.find(item => item.status === 'Resolved')?.count || 0;
-    const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
-    
-    return { total, pending, resolved, resolutionRate };
-  };
-
-  const totalStats = getTotalStats();
+  // Separate heights so the bar chart can be larger and pie matches Violation Type styling
+  const pieChartHeight = Math.max(220, height - 120);
+  const barChartHeight = Math.max(260, height - 110);
+  const pieOuterRadius = Math.max(70, Math.floor(pieChartHeight / 2) - 14);
+  const truncate = (text: string, max = 14) => (text?.length > max ? `${text.slice(0, max - 1)}…` : text);
 
   if (loading) {
     return (
       <Card sx={{ height }}>
         <CardContent>
           <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-            <Typography variant="body2" color="text.secondary">
-              Loading status distribution data...
-            </Typography>
+            <Typography variant="body2" color="text.secondary">Loading status distribution data...</Typography>
           </Box>
         </CardContent>
       </Card>
     );
   }
+
+  // Removed unused computed summaries to keep component lean
 
   return (
     <Card sx={{ height }}>
@@ -284,50 +195,18 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
         title={title}
         action={
           <Box display="flex" alignItems="center" gap={1}>
-            <ToggleButtonGroup
-              value={chartType}
-              exclusive
-              onChange={handleChartTypeChange}
-              size="small"
-            >
-              <ToggleButton value="pie" aria-label="pie chart">
-                <PieChartIcon fontSize="small" />
-              </ToggleButton>
-              <ToggleButton value="bar" aria-label="bar chart">
-                <BarChartIcon fontSize="small" />
-              </ToggleButton>
-              <ToggleButton value="stacked" aria-label="stacked bar chart">
-                <BarChartIcon fontSize="small" />
-              </ToggleButton>
+            <ToggleButtonGroup value={chartType} exclusive onChange={handleChartTypeChange} size="small">
+              <ToggleButton value="pie" aria-label="pie chart"><PieChartIcon fontSize="small" /></ToggleButton>
+              <ToggleButton value="bar" aria-label="bar chart"><BarChartIcon fontSize="small" /></ToggleButton>
+              <ToggleButton value="stacked" aria-label="stacked bar chart"><BarChartIcon fontSize="small" /></ToggleButton>
             </ToggleButtonGroup>
             {showExport && (
               <>
-                <IconButton size="small" onClick={handleExportMenuOpen}>
-                  <MoreVert />
-                </IconButton>
-                <Menu
-                  anchorEl={anchorEl}
-                  open={Boolean(anchorEl)}
-                  onClose={handleExportMenuClose}
-                >
-                  <MenuItem onClick={() => handleExport('pdf')}>
-                    <ListItemIcon>
-                      <PictureAsPdf fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Export as PDF</ListItemText>
-                  </MenuItem>
-                  <MenuItem onClick={() => handleExport('png')}>
-                    <ListItemIcon>
-                      <Download fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Export as PNG</ListItemText>
-                  </MenuItem>
-                  <MenuItem onClick={() => handleExport('csv')}>
-                    <ListItemIcon>
-                      <TableChart fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Export as CSV</ListItemText>
-                  </MenuItem>
+                <IconButton size="small" onClick={handleExportMenuOpen}><MoreVert /></IconButton>
+                <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleExportMenuClose}>
+                  <MenuItem onClick={() => handleExport('pdf')}><ListItemIcon><PictureAsPdf fontSize="small" /></ListItemIcon><ListItemText>Export as PDF</ListItemText></MenuItem>
+                  <MenuItem onClick={() => handleExport('png')}><ListItemIcon><Download fontSize="small" /></ListItemIcon><ListItemText>Export as PNG</ListItemText></MenuItem>
+                  <MenuItem onClick={() => handleExport('csv')}><ListItemIcon><TableChart fontSize="small" /></ListItemIcon><ListItemText>Export as CSV</ListItemText></MenuItem>
                 </Menu>
               </>
             )}
@@ -335,63 +214,82 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
         }
       />
       <CardContent>
-        {/* Summary Stats */}
-        <Box display="flex" gap={2} mb={2} flexWrap="wrap">
-          <Chip 
-            label={`Total: ${totalStats.total}`} 
-            color="primary" 
-            variant="outlined" 
-            size="small"
-          />
-          <Chip 
-            label={`Pending: ${totalStats.pending}`} 
-            color="warning" 
-            variant="outlined" 
-            size="small"
-          />
-          <Chip 
-            label={`Resolved: ${totalStats.resolved}`} 
-            color="success" 
-            variant="outlined" 
-            size="small"
-          />
-          <Chip 
-            label={`Resolution Rate: ${totalStats.resolutionRate}%`} 
-            color="info" 
-            variant="outlined" 
-            size="small"
-          />
-        </Box>
+        {/* Summary chips removed per request */}
 
-        {/* Status Breakdown */}
-        <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
-          {statusData.map((item, index) => (
-            <Chip
-              key={index}
-              icon={item.icon}
-              label={`${item.status}: ${item.count} (${item.percentage}%)`}
-              size="small"
-              sx={{ 
-                bgcolor: item.color,
-                color: 'white',
-                fontSize: '0.7rem'
-              }}
-            />
-          ))}
-        </Box>
+        {chartType !== 'pie' && (
+          <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
+            {statusData.map((item, index) => (
+              <Chip key={index} icon={item.icon} label={`${item.status} (${item.percentage}%)`} size="small" sx={{ bgcolor: item.color, color: 'white', fontSize: '0.7rem' }} />
+            ))}
+          </Box>
+        )}
 
         {statusData.length === 0 ? (
           <Box display="flex" justifyContent="center" alignItems="center" height={height - 200}>
-            <Typography variant="body2" color="text.secondary">
-              No status data available
-            </Typography>
+            <Typography variant="body2" color="text.secondary">No status data available</Typography>
           </Box>
+        ) : chartType === 'pie' ? (
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height={pieChartHeight}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={false}
+                    outerRadius={pieOuterRadius}
+                    dataKey="count"
+                    nameKey="status"
+                  >
+                    {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </Box>
+            <Box sx={{
+              width: { xs: '40%', sm: 200 },
+              minWidth: 140,
+              maxWidth: 220,
+              maxHeight: pieChartHeight,
+              overflowY: 'auto',
+              pl: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75
+            }}>
+              {statusData.map((item, idx) => (
+                <Chip key={idx} size="small" label={`${item.status} (${item.percentage}%)`} sx={{ bgcolor: item.color, color: 'white', justifyContent: 'flex-start' }} />
+              ))}
+            </Box>
+          </Box>
+        ) : chartType === 'bar' ? (
+          <ResponsiveContainer width="100%" height={barChartHeight}>
+            <BarChart data={statusData} margin={{ top: 24, right: 20, left: 12, bottom: 84 }} barCategoryGap="8%" barGap={2}>
+              <CartesianGrid strokeDasharray="3 3" stroke={getGridColor(theme)} />
+              <XAxis dataKey="status" tickFormatter={(v) => truncate(v)} angle={-32} textAnchor="end" height={84} interval={0} tick={{ fontSize: 12, fill: getAxisTickColor(theme) }} />
+              <YAxis domain={[0, 'dataMax + 2']} tick={{ fill: getAxisTickColor(theme) }} />
+              <Tooltip />
+              <Bar dataKey="count" barSize={32}>
+                {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         ) : (
-          <>
-            {chartType === 'pie' && renderPieChart()}
-            {chartType === 'bar' && renderBarChart()}
-            {chartType === 'stacked' && renderStackedBarChart()}
-          </>
+          <ResponsiveContainer width="100%" height={barChartHeight}>
+            <BarChart data={weeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }} barCategoryGap="8%" barGap={2}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="period" angle={-45} textAnchor="end" height={80} interval={0} tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="pending" stackId="a" fill={theme.palette.warning.main} name="Pending" />
+              <Bar dataKey="approved" stackId="a" fill={theme.palette.success.main} name="Approved" />
+              <Bar dataKey="rejected" stackId="a" fill={theme.palette.error.main} name="Rejected" />
+            </BarChart>
+          </ResponsiveContainer>
         )}
       </CardContent>
     </Card>
