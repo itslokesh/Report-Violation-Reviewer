@@ -871,10 +871,8 @@ This platform isn't just another software system—it's a force multiplier for l
 
 **Every 10% improvement in violation detection saves approximately 1,200 lives annually in India. This platform delivers that improvement and more.**
 
-Built by officers, for officers, with the singular goal of making our roads safer for everyone.
+Built by citizens, for officers, with the singular goal of making our roads safer for everyone.
 
 ---
-
-**Built with ❤️ by Traffic Police Officers Who've Walked the Beat**
 
 *"Technology should serve those who serve and protect."*
