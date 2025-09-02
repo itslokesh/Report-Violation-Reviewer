@@ -43,7 +43,11 @@ export interface GeographicStats {
   reports: number;
   approved: number;
   rejected: number;
+  pending: number;
   hotspots: HotspotLocation[];
+  individualViolations: IndividualViolation[];
+  totalHotspots: number;
+  totalIndividualViolations: number;
 }
 
 export interface HotspotLocation {
@@ -51,7 +55,26 @@ export interface HotspotLocation {
   longitude: number;
   address: string;
   violationCount: number;
-  violationTypes: ViolationType[];
+  violationTypes: string[];
+  statusCounts: {
+    REJECTED: number;
+    APPROVED: number;
+    PENDING: number;
+  };
+  district: string;
+  isIndividual: boolean;
+}
+
+export interface IndividualViolation {
+  latitude: number;
+  longitude: number;
+  address: string;
+  violationType: string;
+  status: string;
+  severity: string;
+  timestamp: string;
+  district: string;
+  isIndividual: boolean;
 }
 
 export interface OfficerPerformanceStats {

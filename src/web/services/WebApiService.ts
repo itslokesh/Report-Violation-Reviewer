@@ -12,6 +12,11 @@ export class WebApiService extends BaseApiService {
       const queryString = params ? this.buildQueryString(params) : '';
       const fullUrl = `${this.baseUrl}${url}${queryString}`;
       
+      console.log('WebApiService.get - URL:', fullUrl);
+      console.log('WebApiService.get - Params:', params);
+      console.log('WebApiService.get - Query string:', queryString);
+      console.log('WebApiService.get - Full URL with params:', fullUrl);
+      
       const response = await fetch(fullUrl, {
         method: 'GET',
         headers: this.headers,
@@ -146,16 +151,26 @@ export class WebApiService extends BaseApiService {
   private buildQueryString(params: Record<string, any>): string {
     const searchParams = new URLSearchParams();
     
-    Object.entries(params).forEach(([key, value]) => {
+    const addParam = (key: string, value: any) => {
       if (value !== null && value !== undefined) {
         if (Array.isArray(value)) {
           value.forEach(item => searchParams.append(key, String(item)));
         } else if (value instanceof Date) {
           searchParams.append(key, value.toISOString());
+        } else if (typeof value === 'object') {
+          // Handle nested objects like { dateRange: { relative: '90d' } }
+          Object.entries(value).forEach(([nestedKey, nestedValue]) => {
+            const fullKey = `${key}[${nestedKey}]`;
+            searchParams.append(fullKey, String(nestedValue));
+          });
         } else {
           searchParams.append(key, String(value));
         }
       }
+    };
+    
+    Object.entries(params).forEach(([key, value]) => {
+      addParam(key, value);
     });
 
     const queryString = searchParams.toString();

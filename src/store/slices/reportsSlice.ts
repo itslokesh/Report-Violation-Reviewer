@@ -67,13 +67,13 @@ export const fetchReports = createAsyncThunk(
 
 export const fetchReportById = createAsyncThunk(
   'reports/fetchReportById',
-  async (id: number, thunkApi) => {
+  async (id: number, thunkApi: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get(`/police/reports/${id}`);
       
       if (response.success && response.data) {
-        return response.data.report;
+        return (response.data as any).report;
       } else {
         throw new Error(response.message || 'Failed to fetch report');
       }
@@ -85,7 +85,7 @@ export const fetchReportById = createAsyncThunk(
 
 export const updateReport = createAsyncThunk(
   'reports/updateReport',
-  async ({ id, updateData }: { id: number; updateData: ViolationReportUpdate }, thunkApi) => {
+  async ({ id, updateData }: { id: number; updateData: ViolationReportUpdate }, thunkApi: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/reports/${id}`, updateData);
@@ -105,7 +105,7 @@ export const approveReport = createAsyncThunk(
   'reports/approveReport',
   async (
     { id, reviewNotes, challanNumber, approvedViolationTypes }: { id: number; reviewNotes?: string; challanNumber?: string; approvedViolationTypes?: string[] },
-    thunkApi
+    thunkApi: any
   ) => {
     try {
       const apiService = new WebApiService();
@@ -130,7 +130,7 @@ export const approveReport = createAsyncThunk(
 
 export const rejectReport = createAsyncThunk(
   'reports/rejectReport',
-  async ({ id, reviewNotes }: { id: number; reviewNotes: string }, thunkApi) => {
+  async ({ id, reviewNotes }: { id: number; reviewNotes: string }, thunkApi: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/reports/${id}/status`, {

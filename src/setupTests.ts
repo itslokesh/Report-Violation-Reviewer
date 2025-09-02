@@ -1,22 +1,27 @@
 import '@testing-library/jest-dom';
 
+declare global {
+  var jest: any;
+  var global: any;
+}
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: (global as any).jest?.fn().mockImplementation((query: any) => ({
+  value: global.jest?.fn().mockImplementation((query: any) => ({
     matches: false,
     media: query,
     onchange: null,
-    addListener: (global as any).jest?.fn(), // deprecated
-    removeListener: (global as any).jest?.fn(), // deprecated
-    addEventListener: (global as any).jest?.fn(),
-    removeEventListener: (global as any).jest?.fn(),
-    dispatchEvent: (global as any).jest?.fn(),
+    addListener: global.jest?.fn(), // deprecated
+    removeListener: global.jest?.fn(), // deprecated
+    addEventListener: global.jest?.fn(),
+    removeEventListener: global.jest?.fn(),
+    dispatchEvent: global.jest?.fn(),
   })),
 });
 
 // Mock IntersectionObserver
-(global as any).IntersectionObserver = class IntersectionObserver {
+global.IntersectionObserver = class IntersectionObserver {
   constructor() {}
   disconnect() {}
   observe() {}
@@ -24,7 +29,7 @@ Object.defineProperty(window, 'matchMedia', {
 };
 
 // Mock ResizeObserver
-(global as any).ResizeObserver = class ResizeObserver {
+global.ResizeObserver = class ResizeObserver {
   constructor() {}
   disconnect() {}
   observe() {}
@@ -32,34 +37,34 @@ Object.defineProperty(window, 'matchMedia', {
 };
 
 // Mock Leaflet
-(global as any).jest?.mock('leaflet', () => ({
-  map: (global as any).jest?.fn(() => ({
-    setView: (global as any).jest?.fn(),
-    addLayer: (global as any).jest?.fn(),
-    removeLayer: (global as any).jest?.fn(),
-    on: (global as any).jest?.fn(),
-    off: (global as any).jest?.fn(),
+global.jest?.mock('leaflet', () => ({
+  map: global.jest?.fn(() => ({
+    setView: global.jest?.fn(),
+    addLayer: global.jest?.fn(),
+    removeLayer: global.jest?.fn(),
+    on: global.jest?.fn(),
+    off: global.jest?.fn(),
   })),
-  tileLayer: (global as any).jest?.fn(() => ({
-    addTo: (global as any).jest?.fn(),
+  tileLayer: global.jest?.fn(() => ({
+    addTo: global.jest?.fn(),
   })),
-  marker: (global as any).jest?.fn(() => ({
-    addTo: (global as any).jest?.fn(),
-    bindPopup: (global as any).jest?.fn(),
+  marker: global.jest?.fn(() => ({
+    addTo: global.jest?.fn(),
+    bindPopup: global.jest?.fn(),
   })),
-  icon: (global as any).jest?.fn(),
+  icon: global.jest?.fn(),
 }));
 
 // Mock React Router
-(global as any).jest?.mock('react-router-dom', () => ({
-  ...(global as any).jest?.requireActual('react-router-dom'),
-  useNavigate: () => (global as any).jest?.fn(),
+global.jest?.mock('react-router-dom', () => ({
+  ...global.jest?.requireActual('react-router-dom'),
+  useNavigate: () => global.jest?.fn(),
   useLocation: () => ({ pathname: '/' }),
 }));
 
 // Mock Redux
-(global as any).jest?.mock('react-redux', () => ({
-  ...(global as any).jest?.requireActual('react-redux'),
-  useSelector: (global as any).jest?.fn(),
-  useDispatch: () => (global as any).jest?.fn(),
+global.jest?.mock('react-redux', () => ({
+  ...global.jest?.requireActual('react-redux'),
+  useSelector: global.jest?.fn(),
+  useDispatch: () => global.jest?.fn(),
 }));

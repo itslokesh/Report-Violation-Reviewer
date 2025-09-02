@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -13,7 +13,16 @@ import {
   ListItemIcon,
   ListItemText,
   useTheme,
-  Chip
+  Chip,
+  Button,
+  Popover,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  Stack,
+  Divider,
+  Tooltip
 } from '@mui/material';
 import { 
   PieChart, 
@@ -33,11 +42,15 @@ import {
   Download,
   MoreVert,
   PictureAsPdf,
-  TableChart
+  TableChart,
+  DateRange,
+  Schedule,
+  CalendarToday,
+  Clear
 } from '@mui/icons-material';
-import { useAppSelector } from '../../store';
-import { selectReports } from '../../store/slices/reportsSlice';
-import { selectViolationTypeStats } from '../../store/slices/dashboardSlice';
+import { useAppSelector, useAppDispatch } from '../../store';
+import { selectViolationTypeStats, selectGlobalTimeRange, selectLocalTimeRange, fetchViolationTypeStats, setLocalTimeRange, clearLocalTimeRange } from '../../store/slices/dashboardSlice';
+import { filterDataByGlobalTimeRange, filterDataByLocalTimeRange } from '../../shared/utils/date';
 import { ViolationReport } from '../../shared/models/violation';
 import { ViolationType } from '../../shared/models/common';
 import { getSeriesColorByIndex, getGridColor, getAxisTickColor } from '../../theme/chart';
@@ -46,20 +59,71 @@ interface ViolationTypeChartProps {
   title?: string;
   height?: number;
   showExport?: boolean;
+  isVisible?: boolean;
 }
 
 const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({ 
   title = "Violation Type Distribution",
   height = 400,
-  showExport = true
+  showExport = true,
+  isVisible = true
 }) => {
   const theme = useTheme();
+  const dispatch = useAppDispatch();
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const reports = useAppSelector(selectReports) as ViolationReport[];
-  const { stats: vioStats } = useAppSelector(selectViolationTypeStats);
+  const [timeRangeAnchorEl, setTimeRangeAnchorEl] = useState<null | HTMLElement>(null);
+  const { stats: vioStats, loading } = useAppSelector(selectViolationTypeStats);
+  const globalTimeRange = useAppSelector(selectGlobalTimeRange);
+  const localTimeRange = useAppSelector(selectLocalTimeRange);
+
+  // Use refs to track the last time range values to prevent infinite loops
+  const lastTimeRangeRef = useRef<string>('');
+
+  // Memoize the effective time range to prevent unnecessary re-renders
+  const effectiveTimeRange = useMemo(() => {
+    return localTimeRange.isApplied ? localTimeRange : globalTimeRange;
+  }, [localTimeRange.isApplied, localTimeRange.type, localTimeRange.startDate, localTimeRange.endDate, localTimeRange.relativeRange, globalTimeRange.isApplied, globalTimeRange.type, globalTimeRange.startDate, globalTimeRange.endDate, globalTimeRange.relativeRange]);
+
+  // Fetch violation type stats on component mount and when time ranges change
+  useEffect(() => {
+    // Only fetch data if the component is visible
+    if (!isVisible) {
+      return;
+    }
+
+    const timeRangeKey = `${effectiveTimeRange.type}-${effectiveTimeRange.startDate}-${effectiveTimeRange.endDate}-${effectiveTimeRange.relativeRange}-${effectiveTimeRange.isApplied}`;
+    
+    if (lastTimeRangeRef.current !== timeRangeKey) {
+      console.log('ViolationTypeChart: Dispatching fetchViolationTypeStats with time range:', effectiveTimeRange);
+      dispatch(fetchViolationTypeStats(effectiveTimeRange));
+      lastTimeRangeRef.current = timeRangeKey;
+    }
+  }, [effectiveTimeRange, dispatch, isVisible]);
 
   const COLORS = Array.from({ length: 12 }, (_, i) => getSeriesColorByIndex(theme, i));
+
+  // Get violation type data with global time range filter
+  const getViolationTypeData = () => {
+    console.log('ViolationTypeChart - vioStats:', vioStats);
+    
+    if (vioStats && vioStats.length > 0) {
+      // For violation type stats, we don't apply time filtering as the data is already aggregated
+      console.log('ViolationTypeChart - returning vioStats:', vioStats);
+      return vioStats;
+    }
+
+    console.log('ViolationTypeChart - no stats available, returning empty array');
+    return [];
+  };
+
+  const violationTypeData = getViolationTypeData();
+  
+  console.log('ViolationTypeChart - violationTypeData:', violationTypeData);
+  if (violationTypeData.length > 0) {
+    console.log('Sample violation type item:', violationTypeData[0]);
+    console.log('All violation type items:', violationTypeData.map(item => ({ type: item.type, count: item.count, percentage: item.percentage })));
+  }
 
   const getViolationTypeColor = (type: ViolationType, fallbackIndex: number): string => {
     const colorMap: Record<ViolationType, string> = {
@@ -111,6 +175,59 @@ const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({
     handleExportMenuClose();
   };
 
+  // Time range handlers
+  const handleTimeRangeMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setTimeRangeAnchorEl(event.currentTarget);
+  };
+
+  const handleTimeRangeMenuClose = () => {
+    setTimeRangeAnchorEl(null);
+  };
+
+  const handleTimeRangeTypeChange = (type: 'absolute' | 'relative') => {
+    dispatch(setLocalTimeRange({ ...localTimeRange, type }));
+  };
+
+  const handleRelativeRangeChange = (range: string) => {
+    dispatch(setLocalTimeRange({ ...localTimeRange, relativeRange: range }));
+  };
+
+  const handleApplyTimeRange = () => {
+    dispatch(setLocalTimeRange({ ...localTimeRange, isApplied: true }));
+    // Refetch data with the new time range filter
+    dispatch(fetchViolationTypeStats(localTimeRange));
+    handleTimeRangeMenuClose();
+  };
+
+  const handleClearTimeRange = () => {
+    dispatch(clearLocalTimeRange());
+    // Refetch data without time range filter
+    dispatch(fetchViolationTypeStats(globalTimeRange));
+  };
+
+  const getTimeRangeDisplay = () => {
+    if (!localTimeRange.isApplied) {
+      return 'Last 30 days';
+    }
+
+    if (localTimeRange.type === 'absolute') {
+      return localTimeRange.startDate && localTimeRange.endDate
+        ? `${localTimeRange.startDate} to ${localTimeRange.endDate}`
+        : 'Select dates';
+    } else {
+      const rangeMap: { [key: string]: string } = {
+        '1d': 'Last 24 hours',
+        '7d': 'Last 7 days',
+        '30d': 'Last 30 days',
+        '90d': 'Last 90 days',
+        '1y': 'Last year',
+        'ytd': 'Year to date',
+        'mtd': 'Month to date'
+      };
+      return rangeMap[localTimeRange.relativeRange] || 'Select range';
+    }
+  };
+
   const getViolationTypeLabel = (type: ViolationType): string => {
     switch (type) {
       case ViolationType.WRONG_SIDE_DRIVING: return 'Wrong Side Driving';
@@ -123,6 +240,21 @@ const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({
       case ViolationType.DRUNK_DRIVING_SUSPECTED: return 'Drunk Driving (Suspected)';
       case ViolationType.OTHERS: return 'Others';
       default: return 'Unknown';
+    }
+  };
+
+  const getViolationTypeFromDisplayName = (displayName: string): ViolationType => {
+    switch (displayName) {
+      case 'Wrong Side Driving': return ViolationType.WRONG_SIDE_DRIVING;
+      case 'No Parking Zone': return ViolationType.NO_PARKING_ZONE;
+      case 'Signal Jumping': return ViolationType.SIGNAL_JUMPING;
+      case 'Speed Violation': return ViolationType.SPEED_VIOLATION;
+      case 'Helmet/Seatbelt Violation': return ViolationType.HELMET_SEATBELT_VIOLATION;
+      case 'Mobile Phone Usage': return ViolationType.MOBILE_PHONE_USAGE;
+      case 'Lane Cutting': return ViolationType.LANE_CUTTING;
+      case 'Drunk Driving (Suspected)': return ViolationType.DRUNK_DRIVING_SUSPECTED;
+      case 'Others': return ViolationType.OTHERS;
+      default: return ViolationType.OTHERS;
     }
   };
 
@@ -174,49 +306,59 @@ const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({
   };
 
   const fromReports = useMemo(() => {
-    const counts: Record<ViolationType, number> = {
-      [ViolationType.WRONG_SIDE_DRIVING]: 0,
-      [ViolationType.NO_PARKING_ZONE]: 0,
-      [ViolationType.SIGNAL_JUMPING]: 0,
-      [ViolationType.SPEED_VIOLATION]: 0,
-      [ViolationType.HELMET_SEATBELT_VIOLATION]: 0,
-      [ViolationType.MOBILE_PHONE_USAGE]: 0,
-      [ViolationType.LANE_CUTTING]: 0,
-      [ViolationType.DRUNK_DRIVING_SUSPECTED]: 0,
-      [ViolationType.OTHERS]: 0,
-    };
-    (reports || []).forEach((r) => {
-      const fromMeta = extractViolationsFromMetadata(r.media?.mediaMetadata);
-      const types = fromMeta.length ? fromMeta : (r.violationType ? [r.violationType] : []);
-      if (types.length === 0) {
-        counts[ViolationType.OTHERS] += 1;
-      } else {
-        types.forEach(t => { counts[t] = (counts[t] || 0) + 1; });
-      }
-    });
-    const total = Object.values(counts).reduce((s, n) => s + n, 0);
-    const rows = Object.keys(counts).map((k, i) => ({
-      name: getViolationTypeLabel(ViolationType[k as keyof typeof ViolationType]),
-      value: counts[k as keyof typeof counts],
-      percentage: total ? (counts[k as keyof typeof counts] / total) * 100 : 0,
-      type: ViolationType[k as keyof typeof ViolationType],
-      color: getViolationTypeColor(ViolationType[k as keyof typeof ViolationType], i)
-    })).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
-    return rows;
-  }, [reports]);
+    console.log('fromReports - violationTypeData:', violationTypeData);
+    
+    // Since the data is already coming with proper display names, we should use fromStats instead
+    // This function is meant for processing raw violation reports, but we're getting pre-processed stats
+    console.log('fromReports: Data is already processed, using fromStats logic instead');
+    return [];
+  }, [violationTypeData]);
 
-  const fromStats = useMemo(() => {
-    const rows = (vioStats || []).map((s: any, i: number) => ({
-      name: getViolationTypeLabel(s.type),
-      value: s.count,
-      percentage: s.percentage,
-      type: s.type as ViolationType,
-      color: getViolationTypeColor(s.type as ViolationType, i),
-    }));
-    return rows;
-  }, [vioStats]);
+     const fromStats = useMemo(() => {
+     console.log('fromStats - violationTypeData:', violationTypeData);
+     
+     if (!violationTypeData || violationTypeData.length === 0) {
+       console.log('fromStats: No violation type data available');
+       return [];
+     }
+     
+     // Calculate total count for percentage calculation
+     const totalCount = violationTypeData.reduce((sum: number, item: any) => sum + (item.count || 0), 0);
+     console.log('fromStats - Total count:', totalCount);
+     
+     const rows = violationTypeData.map((s: any, i: number) => {
+       // Use displayName for the chart label
+       const name = s.displayName || 'Unknown';
+       const value = s.count || 0;
+       
+       // Calculate percentage if not provided or if it's 0
+       let percentage = s.percentage || 0;
+       if (percentage === 0 && totalCount > 0 && value > 0) {
+         percentage = (value / totalCount) * 100;
+       }
+       
+       // Use the enum type for color mapping
+       const type = s.type;
+       const color = getViolationTypeColor(type, i);
+       
+       console.log(`fromStats row ${i}: displayName=${s.displayName}, type=${s.type}, name=${name}, value=${value}, percentage=${percentage}, totalCount=${totalCount}`);
+       
+       return {
+         name,
+         value,
+         percentage,
+         type,
+         color,
+       };
+     });
+     
+     console.log('fromStats final rows:', rows);
+     return rows;
+   }, [violationTypeData]);
 
   const chartData = fromReports.length > 0 ? fromReports : fromStats;
+  console.log('chartData selected:', chartData === fromReports ? 'fromReports' : 'fromStats');
+  console.log('chartData:', chartData);
   const uniqueColors = useMemo(() => generateDistinctColors(chartData.length), [chartData.length]);
   const coloredData = useMemo(() => chartData.map((d, i) => ({ ...d, color: uniqueColors[i] })), [chartData, uniqueColors]);
 
@@ -251,6 +393,30 @@ const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({
               <ToggleButton value="pie" aria-label="pie chart"><PieChartIcon /></ToggleButton>
               <ToggleButton value="bar" aria-label="bar chart"><BarChartIcon /></ToggleButton>
             </ToggleButtonGroup>
+            
+            {/* Time Range Button */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DateRange />}
+              onClick={handleTimeRangeMenuOpen}
+              sx={{ minWidth: 120, justifyContent: 'space-between' }}
+            >
+              {getTimeRangeDisplay()}
+            </Button>
+
+            {localTimeRange.isApplied && localTimeRange.relativeRange !== '30d' && (
+              <Tooltip title="Clear time range filter">
+                <IconButton
+                  size="small"
+                  onClick={handleClearTimeRange}
+                  sx={{ color: 'error.main' }}
+                >
+                  <Clear fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+
             {showExport && (
               <>
                 <IconButton size="small" onClick={handleExportMenuOpen}><MoreVert /></IconButton>
@@ -264,12 +430,16 @@ const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({
           </Box>
         }
       />
-      <CardContent>
-        {coloredData.length === 0 ? (
-          <Box display="flex" justifyContent="center" alignItems="center" height={height - 100}>
-            <Typography variant="body2" color="text.secondary">No violation type data available</Typography>
-          </Box>
-        ) : chartType === 'pie' ? (
+             <CardContent>
+         {loading ? (
+           <Box display="flex" justifyContent="center" alignItems="center" height={height - 100}>
+             <Typography variant="body2" color="text.secondary">Loading violation type data...</Typography>
+           </Box>
+         ) : coloredData.length === 0 ? (
+           <Box display="flex" justifyContent="center" alignItems="center" height={height - 100}>
+             <Typography variant="body2" color="text.secondary">No violation type data available</Typography>
+           </Box>
+         ) : chartType === 'pie' ? (
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <ResponsiveContainer width="100%" height={pieChartHeight}>
@@ -325,6 +495,112 @@ const ViolationTypeChart: React.FC<ViolationTypeChartProps> = ({
           </ResponsiveContainer>
         )}
       </CardContent>
+
+      {/* Time Range Popover */}
+      <Popover
+        open={Boolean(timeRangeAnchorEl)}
+        anchorEl={timeRangeAnchorEl}
+        onClose={handleTimeRangeMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        PaperProps={{
+          sx: { width: 350, p: 2 }
+        }}
+      >
+        <Stack spacing={2}>
+          <Typography variant="h6" fontWeight="bold">Chart Time Range Filter</Typography>
+          <Typography variant="body2" color="text.secondary">
+            This filter will be applied to this chart only
+          </Typography>
+
+          {/* Time Range Type Selection */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>Filter Type</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant={localTimeRange.type === 'relative' ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<Schedule />}
+                onClick={() => handleTimeRangeTypeChange('relative')}
+                fullWidth
+              >
+                Relative
+              </Button>
+              <Button
+                variant={localTimeRange.type === 'absolute' ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<CalendarToday />}
+                onClick={() => handleTimeRangeTypeChange('absolute')}
+                fullWidth
+              >
+                Absolute
+              </Button>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          {/* Relative Time Range Options */}
+          {localTimeRange.type === 'relative' && (
+            <FormControl fullWidth size="small">
+              <InputLabel>Select Range</InputLabel>
+              <Select
+                value={localTimeRange.relativeRange}
+                label="Select Range"
+                onChange={(e) => handleRelativeRangeChange(e.target.value)}
+              >
+                <MenuItem value="1d">Last 24 hours</MenuItem>
+                <MenuItem value="7d">Last 7 days</MenuItem>
+                <MenuItem value="30d">Last 30 days</MenuItem>
+                <MenuItem value="90d">Last 90 days</MenuItem>
+                <MenuItem value="1y">Last year</MenuItem>
+                <MenuItem value="ytd">Year to date</MenuItem>
+                <MenuItem value="mtd">Month to date</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+
+          {/* Absolute Time Range Options */}
+          {localTimeRange.type === 'absolute' && (
+            <Stack spacing={2}>
+                             <TextField
+                 label="Start Date"
+                 type="date"
+                 value={localTimeRange.startDate}
+                 onChange={(e) => dispatch(setLocalTimeRange({ ...localTimeRange, startDate: e.target.value }))}
+                 size="small"
+                 fullWidth
+                 InputLabelProps={{ shrink: true }}
+               />
+               <TextField
+                 label="End Date"
+                 type="date"
+                 value={localTimeRange.endDate}
+                 onChange={(e) => dispatch(setLocalTimeRange({ ...localTimeRange, endDate: e.target.value }))}
+                 size="small"
+                 fullWidth
+                 InputLabelProps={{ shrink: true }}
+               />
+            </Stack>
+          )}
+
+          {/* Apply Button */}
+          <Button
+            variant="contained"
+            onClick={handleApplyTimeRange}
+            fullWidth
+            disabled={localTimeRange.type === 'absolute' ? (!localTimeRange.startDate || !localTimeRange.endDate) : !localTimeRange.relativeRange}
+          >
+            Apply Filter
+          </Button>
+        </Stack>
+      </Popover>
     </Card>
   );
 };

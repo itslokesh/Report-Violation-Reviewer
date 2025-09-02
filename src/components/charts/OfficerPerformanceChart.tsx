@@ -12,69 +12,105 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  LinearProgress,
-  useTheme
+  useTheme,
+  Button,
+  Popover,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  Stack,
+  Divider,
+  Tooltip
 } from '@mui/material';
-import { BarChart } from '@mui/x-charts/BarChart';
-import { PieChart } from '@mui/x-charts/PieChart';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as RechartsTooltip, 
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 import { 
   BarChart as BarChartIcon,
-  TableChart as TableChartIcon,
+  ShowChart as LineChartIcon,
+  PieChart as PieChartIcon,
+  Download,
   MoreVert,
   PictureAsPdf,
-  Download,
-  TrendingUp,
-  TrendingDown,
-  Person
+  TableChart,
+  DateRange,
+  Schedule,
+  CalendarToday,
+  Clear
 } from '@mui/icons-material';
 import { useAppSelector } from '../../store';
-import { selectOfficerPerformance } from '../../store/slices/dashboardSlice';
-import { getSeriesColorByIndex } from '../../theme/chart';
+import { selectOfficerPerformance, selectGlobalTimeRange } from '../../store/slices/dashboardSlice';
+import { filterDataByGlobalTimeRange, filterDataByLocalTimeRange } from '../../shared/utils/date';
+import { getGridColor, getAxisTickColor } from '../../theme/chart';
 
 interface OfficerPerformanceChartProps {
   title?: string;
   height?: number;
   showExport?: boolean;
-  maxOfficers?: number;
 }
 
 const OfficerPerformanceChart: React.FC<OfficerPerformanceChartProps> = ({ 
-  title = "Officer Performance Metrics",
-  height = 500,
-  showExport = true,
-  maxOfficers = 10
+  title = "Officer Performance",
+  height = 400,
+  showExport = true
 }) => {
   const theme = useTheme();
-  const [viewType, setViewType] = useState<'chart' | 'table'>('chart');
-  const [metricType, setMetricType] = useState<'processed' | 'time' | 'rate'>('processed');
+  const [chartType, setChartType] = useState<'bar' | 'line' | 'pie'>('bar');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const { stats, loading } = useAppSelector(selectOfficerPerformance);
+  const [timeRangeAnchorEl, setTimeRangeAnchorEl] = useState<null | HTMLElement>(null);
+  const { stats: officerStats, loading } = useAppSelector(selectOfficerPerformance);
+  const globalTimeRange = useAppSelector(selectGlobalTimeRange);
 
-  const handleViewTypeChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newViewType: 'chart' | 'table' | null,
-  ) => {
-    void event;
-    if (newViewType !== null) {
-      setViewType(newViewType);
+  // Local time range state
+  const [localTimeRange, setLocalTimeRange] = useState({
+    type: 'relative' as 'absolute' | 'relative',
+    startDate: '',
+    endDate: '',
+    relativeRange: '7d',
+    isApplied: false
+  });
+
+  // Get officer performance data with global and local time range filters
+  const getOfficerData = () => {
+    if (officerStats && officerStats.length > 0) {
+      let filteredData = officerStats;
+      
+      // Apply global time range filter if it's applied
+      if (globalTimeRange.isApplied) {
+        filteredData = filterDataByGlobalTimeRange(filteredData, globalTimeRange);
+      }
+
+      // Apply local time range filter if it's applied
+      if (localTimeRange.isApplied) {
+        filteredData = filterDataByLocalTimeRange(filteredData, localTimeRange);
+      }
+
+      return filteredData;
     }
+    return [];
   };
 
-  const handleMetricTypeChange = (
+  const officerData = getOfficerData();
+
+  const handleChartTypeChange = (
     event: React.MouseEvent<HTMLElement>,
-    newMetricType: 'processed' | 'time' | 'rate' | null,
+    newChartType: 'bar' | 'line' | 'pie' | null,
   ) => {
     void event;
-    if (newMetricType !== null) {
-      setMetricType(newMetricType);
+    if (newChartType !== null) {
+      setChartType(newChartType);
     }
   };
 
@@ -91,59 +127,87 @@ const OfficerPerformanceChart: React.FC<OfficerPerformanceChartProps> = ({
     handleExportMenuClose();
   };
 
-  const COLORS = Array.from({ length: 12 }, (_, i) => getSeriesColorByIndex(theme, i));
-
-  const getMetricData = () => {
-    if (!stats) return [] as Array<{
-      name: string; badgeNumber: string; reportsProcessed: number; averageProcessingTime: number; approvalRate: number; accuracyRate: number; challansIssued: number; color: string;
-    }>;
-    const sortedStats = [...stats].sort((a, b) => {
-      switch (metricType) {
-        case 'processed':
-          return b.reportsProcessed - a.reportsProcessed;
-        case 'time':
-          return a.averageProcessingTime - b.averageProcessingTime;
-        case 'rate':
-          return b.approvalRate - a.approvalRate;
-        default:
-          return b.reportsProcessed - a.reportsProcessed;
-      }
-    });
-    return sortedStats.slice(0, maxOfficers).map((officer, index) => ({
-      name: officer.officerName,
-      badgeNumber: officer.badgeNumber,
-      reportsProcessed: officer.reportsProcessed,
-      averageProcessingTime: Math.round(officer.averageProcessingTime / 60),
-      approvalRate: Math.round(officer.approvalRate * 100),
-      accuracyRate: Math.round(officer.accuracyRate * 100),
-      challansIssued: officer.challansIssued,
-      color: COLORS[index % COLORS.length]
-    }));
+  // Time range handlers
+  const handleTimeRangeMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setTimeRangeAnchorEl(event.currentTarget);
   };
 
-  const chartData = getMetricData();
-  const chartAreaHeight = Math.max(220, height - 160);
-  const truncate = (text: string, max = 16) => (text?.length > max ? `${text.slice(0, max - 1)}…` : text);
+  const handleTimeRangeMenuClose = () => {
+    setTimeRangeAnchorEl(null);
+  };
 
-  const getMetricLabel = () => {
-    switch (metricType) {
-      case 'processed': return 'Reports Processed';
-      case 'time': return 'Average Processing Time (minutes)';
-      case 'rate': return 'Approval Rate (%)';
-      default: return 'Reports Processed';
+  const handleTimeRangeTypeChange = (type: 'absolute' | 'relative') => {
+    setLocalTimeRange(prev => ({ ...prev, type }));
+  };
+
+  const handleRelativeRangeChange = (range: string) => {
+    setLocalTimeRange(prev => ({ ...prev, relativeRange: range }));
+  };
+
+  const handleApplyTimeRange = () => {
+    setLocalTimeRange(prev => ({ ...prev, isApplied: true }));
+    handleTimeRangeMenuClose();
+  };
+
+  const handleClearTimeRange = () => {
+    setLocalTimeRange({
+      type: 'relative',
+      startDate: '',
+      endDate: '',
+      relativeRange: '30d',
+      isApplied: true
+    });
+  };
+
+  const getTimeRangeDisplay = () => {
+    if (!localTimeRange.isApplied) {
+      return 'Last 30 days';
+    }
+
+    if (localTimeRange.type === 'absolute') {
+      return localTimeRange.startDate && localTimeRange.endDate
+        ? `${localTimeRange.startDate} to ${localTimeRange.endDate}`
+        : 'Select dates';
+    } else {
+      const rangeMap: { [key: string]: string } = {
+        '1d': 'Last 24 hours',
+        '7d': 'Last 7 days',
+        '30d': 'Last 30 days',
+        '90d': 'Last 90 days',
+        '1y': 'Last year',
+        'ytd': 'Year to date',
+        'mtd': 'Month to date'
+      };
+      return rangeMap[localTimeRange.relativeRange] || 'Select range';
     }
   };
 
-  const getTotalStats = () => {
-    if (!stats) return { totalOfficers: 0, totalReports: 0, avgApprovalRate: 0, avgProcessingTime: 0 };
-    const totalOfficers = stats.length;
-    const totalReports = stats.reduce((sum, officer) => sum + officer.reportsProcessed, 0);
-    const avgApprovalRate = Math.round(stats.reduce((sum, officer) => sum + officer.approvalRate, 0) / totalOfficers * 100);
-    const avgProcessingTime = Math.round(stats.reduce((sum, officer) => sum + officer.averageProcessingTime, 0) / totalOfficers / 60);
-    return { totalOfficers, totalReports, avgApprovalRate, avgProcessingTime };
-  };
+  const chartData = officerData.map((officer: any) => ({
+    name: officer.officerName || 'Officer',
+    processed: officer.reportsProcessed || 0,
+    approved: Math.round((officer.approvalRate || 0) * 100),
+    accuracy: Math.round((officer.accuracyRate || 0) * 100),
+    avgTime: Math.max(0, Math.round((officer.averageProcessingTime || 0) / 60)),
+    challans: officer.challansIssued || 0
+  }));
 
-  const totalStats = getTotalStats();
+  const truncate = (text: string, max = 12) => (text?.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <Box sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1, p: 2, boxShadow: 2 }}>
+          <Typography variant="subtitle2" fontWeight="bold">{label}</Typography>
+          {payload.map((entry: any, index: number) => (
+            <Typography key={index} variant="body2" color="text.secondary">
+              {entry.name}: {entry.value}
+            </Typography>
+          ))}
+        </Box>
+      );
+    }
+    return null;
+  };
 
   if (loading) {
     return (
@@ -163,24 +227,42 @@ const OfficerPerformanceChart: React.FC<OfficerPerformanceChartProps> = ({
         title={title}
         action={
           <Box display="flex" alignItems="center" gap={1}>
-            <ToggleButtonGroup value={viewType} exclusive onChange={handleViewTypeChange} size="small">
-              <ToggleButton value="chart" aria-label="chart view"><BarChartIcon fontSize="small" /></ToggleButton>
-              <ToggleButton value="table" aria-label="table view"><TableChartIcon fontSize="small" /></ToggleButton>
+            <ToggleButtonGroup value={chartType} exclusive onChange={handleChartTypeChange} size="small">
+              <ToggleButton value="bar" aria-label="bar chart"><BarChartIcon /></ToggleButton>
+              <ToggleButton value="line" aria-label="line chart"><LineChartIcon /></ToggleButton>
+              <ToggleButton value="pie" aria-label="pie chart"><PieChartIcon /></ToggleButton>
             </ToggleButtonGroup>
-            {viewType === 'chart' && (
-              <ToggleButtonGroup value={metricType} exclusive onChange={handleMetricTypeChange} size="small">
-                <ToggleButton value="processed" aria-label="reports processed">Reports</ToggleButton>
-                <ToggleButton value="time" aria-label="processing time">Time</ToggleButton>
-                <ToggleButton value="rate" aria-label="approval rate">Rate</ToggleButton>
-              </ToggleButtonGroup>
+            
+            {/* Time Range Button */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DateRange />}
+              onClick={handleTimeRangeMenuOpen}
+              sx={{ minWidth: 120, justifyContent: 'space-between' }}
+            >
+              {getTimeRangeDisplay()}
+            </Button>
+
+            {localTimeRange.isApplied && localTimeRange.relativeRange !== '30d' && (
+              <Tooltip title="Clear time range filter">
+                <IconButton
+                  size="small"
+                  onClick={handleClearTimeRange}
+                  sx={{ color: 'error.main' }}
+                >
+                  <Clear fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
+
             {showExport && (
               <>
                 <IconButton size="small" onClick={handleExportMenuOpen}><MoreVert /></IconButton>
                 <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleExportMenuClose}>
                   <MenuItem onClick={() => handleExport('pdf')}><ListItemIcon><PictureAsPdf fontSize="small" /></ListItemIcon><ListItemText>Export as PDF</ListItemText></MenuItem>
                   <MenuItem onClick={() => handleExport('png')}><ListItemIcon><Download fontSize="small" /></ListItemIcon><ListItemText>Export as PNG</ListItemText></MenuItem>
-                  <MenuItem onClick={() => handleExport('csv')}><ListItemIcon><TableChartIcon fontSize="small" /></ListItemIcon><ListItemText>Export as CSV</ListItemText></MenuItem>
+                  <MenuItem onClick={() => handleExport('csv')}><ListItemIcon><TableChart fontSize="small" /></ListItemIcon><ListItemText>Export as CSV</ListItemText></MenuItem>
                 </Menu>
               </>
             )}
@@ -188,86 +270,160 @@ const OfficerPerformanceChart: React.FC<OfficerPerformanceChartProps> = ({
         }
       />
       <CardContent>
-        <Box display="flex" gap={2} mb={2} flexWrap="wrap">
-          <Chip label={`Officers: ${totalStats.totalOfficers}`} color="primary" variant="outlined" size="small" />
-          <Chip label={`Total Reports: ${totalStats.totalReports}`} color="secondary" variant="outlined" size="small" />
-          <Chip label={`Avg Approval: ${totalStats.avgApprovalRate}%`} color="success" variant="outlined" size="small" />
-          <Chip label={`Avg Time: ${totalStats.avgProcessingTime}m`} color="info" variant="outlined" size="small" />
-        </Box>
-
-        {viewType === 'chart' ? (
-          <>
-            <Typography variant="body2" color="text.secondary" mb={1}>{getMetricLabel()}</Typography>
-            {metricType === 'rate' ? (
-              <PieChart
-                height={chartAreaHeight}
-                series={[{
-                  data: chartData.slice(0, 5).map((d, i) => ({ id: i, label: d.name, value: d.approvalRate, color: d.color })),
-                  paddingAngle: 2,
-                }]}
-                margin={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              />
-            ) : (
-              <BarChart
-                height={chartAreaHeight}
-                xAxis={[{ scaleType: 'band', data: chartData.map(d => truncate(d.name)), tickLabelStyle: { angle: -35, textAnchor: 'end' } }]}
-                series={[{ data: chartData.map(d => metricType === 'processed' ? d.reportsProcessed : d.averageProcessingTime), label: metricType === 'processed' ? 'Reports' : 'Avg Time (m)', color: theme.palette.primary.main }]}
-                margin={{ top: 20, right: 20, left: 20, bottom: 70 }}
-                grid={{ horizontal: true }}
-              />
-            )}
-          </>
+        {chartData.length === 0 ? (
+          <Box display="flex" justifyContent="center" alignItems="center" height={height - 100}>
+            <Typography variant="body2" color="text.secondary">No officer performance data available</Typography>
+          </Box>
+        ) : chartType === 'bar' ? (
+          <ResponsiveContainer width="100%" height={height - 120}>
+            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={getGridColor(theme)} />
+              <XAxis dataKey="name" tickFormatter={(v) => truncate(v)} angle={-45} textAnchor="end" height={80} interval={0} tick={{ fontSize: 12, fill: getAxisTickColor(theme) }} />
+              <YAxis tick={{ fill: getAxisTickColor(theme) }} />
+              <RechartsTooltip content={<CustomTooltip />} />
+              <Bar dataKey="processed" fill={theme.palette.primary.main} name="Reports Processed" />
+              <Bar dataKey="challans" fill={theme.palette.secondary.main} name="Challans Issued" />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : chartType === 'line' ? (
+          <ResponsiveContainer width="100%" height={height - 120}>
+            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={getGridColor(theme)} />
+              <XAxis dataKey="name" tickFormatter={(v) => truncate(v)} angle={-45} textAnchor="end" height={80} interval={0} tick={{ fontSize: 12, fill: getAxisTickColor(theme) }} />
+              <YAxis tick={{ fill: getAxisTickColor(theme) }} />
+              <RechartsTooltip content={<CustomTooltip />} />
+              <Line type="monotone" dataKey="approved" stroke={theme.palette.success.main} name="Approval Rate (%)" strokeWidth={2} />
+              <Line type="monotone" dataKey="accuracy" stroke={theme.palette.info.main} name="Accuracy Rate (%)" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
         ) : (
-          <TableContainer component={Paper} sx={{ maxHeight: height - 150 }}>
-            <Table stickyHeader size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Officer</TableCell>
-                  <TableCell>Badge</TableCell>
-                  <TableCell align="right">Reports</TableCell>
-                  <TableCell align="right">Avg Time (m)</TableCell>
-                  <TableCell align="right">Approval Rate</TableCell>
-                  <TableCell align="right">Accuracy</TableCell>
-                  <TableCell align="right">Challans</TableCell>
-                  <TableCell align="center">Performance</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {chartData.map((officer, index) => {
-                  const performanceScore = Math.round((officer.approvalRate * 0.4 + officer.accuracyRate * 0.3 + (100 - officer.averageProcessingTime) * 0.3));
-                  return (
-                    <TableRow key={index} hover>
-                      <TableCell>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Person fontSize="small" color="action" />
-                          <Typography variant="body2" fontWeight="medium">{officer.name}</Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell><Chip label={officer.badgeNumber} size="small" variant="outlined" /></TableCell>
-                      <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="primary">{officer.reportsProcessed}</Typography></TableCell>
-                      <TableCell align="right"><Typography variant="body2" color="text.secondary">{officer.averageProcessingTime}m</Typography></TableCell>
-                      <TableCell align="right">
-                        <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
-                          <Typography variant="body2" fontWeight="bold" color="success.main">{officer.approvalRate}%</Typography>
-                          {officer.approvalRate > 80 ? (<TrendingUp fontSize="small" color="success" />) : (<TrendingDown fontSize="small" color="error" />)}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right"><Typography variant="body2" color="info.main">{officer.accuracyRate}%</Typography></TableCell>
-                      <TableCell align="right"><Typography variant="body2" color="secondary.main">{officer.challansIssued}</Typography></TableCell>
-                      <TableCell align="center">
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <LinearProgress variant="determinate" value={performanceScore} sx={{ width: 60, height: 8, borderRadius: 4, bgcolor: 'grey.200' }} />
-                          <Typography variant="caption" color="text.secondary">{performanceScore}%</Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ResponsiveContainer width="100%" height={height - 120}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, value }) => `${truncate(name)}: ${value}`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="processed"
+              >
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={theme.palette.primary.main} />
+                ))}
+              </Pie>
+              <RechartsTooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
         )}
       </CardContent>
+
+      {/* Time Range Popover */}
+      <Popover
+        open={Boolean(timeRangeAnchorEl)}
+        anchorEl={timeRangeAnchorEl}
+        onClose={handleTimeRangeMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        PaperProps={{
+          sx: { width: 350, p: 2 }
+        }}
+      >
+        <Stack spacing={2}>
+          <Typography variant="h6" fontWeight="bold">Chart Time Range Filter</Typography>
+          <Typography variant="body2" color="text.secondary">
+            This filter will be applied to this chart only
+          </Typography>
+
+          {/* Time Range Type Selection */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>Filter Type</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant={localTimeRange.type === 'relative' ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<Schedule />}
+                onClick={() => handleTimeRangeTypeChange('relative')}
+                fullWidth
+              >
+                Relative
+              </Button>
+              <Button
+                variant={localTimeRange.type === 'absolute' ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<CalendarToday />}
+                onClick={() => handleTimeRangeTypeChange('absolute')}
+                fullWidth
+              >
+                Absolute
+              </Button>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          {/* Relative Time Range Options */}
+          {localTimeRange.type === 'relative' && (
+            <FormControl fullWidth size="small">
+              <InputLabel>Select Range</InputLabel>
+              <Select
+                value={localTimeRange.relativeRange}
+                label="Select Range"
+                onChange={(e) => handleRelativeRangeChange(e.target.value)}
+              >
+                <MenuItem value="1d">Last 24 hours</MenuItem>
+                <MenuItem value="7d">Last 7 days</MenuItem>
+                <MenuItem value="30d">Last 30 days</MenuItem>
+                <MenuItem value="90d">Last 90 days</MenuItem>
+                <MenuItem value="1y">Last year</MenuItem>
+                <MenuItem value="ytd">Year to date</MenuItem>
+                <MenuItem value="mtd">Month to date</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+
+          {/* Absolute Time Range Options */}
+          {localTimeRange.type === 'absolute' && (
+            <Stack spacing={2}>
+              <TextField
+                label="Start Date"
+                type="date"
+                value={localTimeRange.startDate}
+                onChange={(e) => setLocalTimeRange(prev => ({ ...prev, startDate: e.target.value }))}
+                size="small"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="End Date"
+                type="date"
+                value={localTimeRange.endDate}
+                onChange={(e) => setLocalTimeRange(prev => ({ ...prev, endDate: e.target.value }))}
+                size="small"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+          )}
+
+          {/* Apply Button */}
+          <Button
+            variant="contained"
+            onClick={handleApplyTimeRange}
+            fullWidth
+            disabled={localTimeRange.type === 'absolute' ? (!localTimeRange.startDate || !localTimeRange.endDate) : !localTimeRange.relativeRange}
+          >
+            Apply Filter
+          </Button>
+        </Stack>
+      </Popover>
     </Card>
   );
 };

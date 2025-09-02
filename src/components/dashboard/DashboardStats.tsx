@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, Card, CardContent, Typography, Box, useTheme } from '@mui/material';
+import { Grid, Card, CardContent, Typography, Box, useTheme, Skeleton, Alert } from '@mui/material';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -9,8 +9,8 @@ import {
   Speed
 } from '@mui/icons-material';
 import { useAppSelector } from '../../store';
-import { selectDashboardStats } from '../../store/slices/dashboardSlice';
-import { DateUtils } from '../../shared/utils/date';
+import { selectDashboardStats, selectGlobalTimeRange } from '../../store/slices/dashboardSlice';
+import { filterDataByGlobalTimeRange, DateUtils } from '../../shared/utils/date';
 
 interface StatCardProps {
   title: string;
@@ -82,8 +82,8 @@ const StatCard: React.FC<StatCardProps> = ({
             sx={{ 
               p: 1, 
               borderRadius: 2, 
-              bgcolor: (theme) => theme.palette[color as any]?.light || theme.palette.primary.light,
-              color: (theme) => theme.palette[color as any]?.main || theme.palette.primary.main,
+              bgcolor: (theme) => (theme.palette as any)[color]?.light || theme.palette.primary.light,
+              color: (theme) => (theme.palette as any)[color]?.main || theme.palette.primary.main,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -99,19 +99,16 @@ const StatCard: React.FC<StatCardProps> = ({
 
 const DashboardStats: React.FC = () => {
   const { stats, loading } = useAppSelector(selectDashboardStats);
+  const globalTimeRange = useAppSelector(selectGlobalTimeRange);
 
   if (loading) {
     return (
       <Grid container spacing={3}>
-        {[1, 2, 3, 4].map((item) => (
-          <Grid item xs={12} sm={6} md={3} key={item}>
-            <Card sx={{ height: 140 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <Grid item xs={12} sm={6} lg={3} key={i}>
+            <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Loading...
-                  </Typography>
-                </Box>
+                <Skeleton variant="rectangular" height={60} />
               </CardContent>
             </Card>
           </Grid>
@@ -122,21 +119,17 @@ const DashboardStats: React.FC = () => {
 
   if (!stats) {
     return (
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="body1" color="text.secondary" textAlign="center">
-                No dashboard data available
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <Alert severity="info">
+        No dashboard statistics available. Please check your connection and try again.
+      </Alert>
     );
   }
 
   const today = new Date();
+  
+  // For dashboard stats, we don't apply time filtering as the data is already aggregated
+  // The global time range should be applied at the API level when fetching data
+  const filteredStats = stats;
 
   return (
     <Grid container spacing={3}>
@@ -144,7 +137,7 @@ const DashboardStats: React.FC = () => {
       <Grid item xs={12} sm={6} md={3}>
         <StatCard
           title="Total Reports"
-          value={stats?.totalReports || 0}
+          value={filteredStats?.totalReports || 0}
           subtitle={`Last updated: ${DateUtils.formatDate(today, 'short')}`}
           icon={<Assignment sx={{ fontSize: 24 }} />}
           color="primary"
@@ -160,7 +153,7 @@ const DashboardStats: React.FC = () => {
       <Grid item xs={12} sm={6} md={3}>
         <StatCard
           title="Pending Reports"
-          value={stats?.pendingReports || 0}
+          value={filteredStats?.pendingReports || 0}
           subtitle="Awaiting review"
           icon={<Schedule sx={{ fontSize: 24 }} />}
           color="warning"
@@ -176,8 +169,8 @@ const DashboardStats: React.FC = () => {
       <Grid item xs={12} sm={6} md={3}>
         <StatCard
           title="Processed Today"
-          value={stats?.processedToday || 0}
-          subtitle={`${stats?.approvedToday || 0} approved, ${stats?.rejectedToday || 0} rejected`}
+          value={filteredStats?.processedToday || 0}
+          subtitle={`${filteredStats?.approvedToday || 0} approved, ${filteredStats?.rejectedToday || 0} rejected`}
           icon={<CheckCircle sx={{ fontSize: 24 }} />}
           color="success"
           trend={{
@@ -192,7 +185,7 @@ const DashboardStats: React.FC = () => {
       <Grid item xs={12} sm={6} md={3}>
         <StatCard
           title="Avg. Processing Time"
-          value={`${Math.round((stats?.averageProcessingTime || 0) / 60)}m`}
+          value={`${Math.max(0, Math.round((filteredStats?.averageProcessingTime || 0) / 60))}m`}
           subtitle="From submission to resolution"
           icon={<Speed sx={{ fontSize: 24 }} />}
           color="info"
@@ -210,7 +203,7 @@ const DashboardStats: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="success.main" fontWeight="bold">
-                {stats?.approvedToday || 0}
+                {filteredStats?.approvedToday || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Approved Today
@@ -220,7 +213,7 @@ const DashboardStats: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="error.main" fontWeight="bold">
-                {stats?.rejectedToday || 0}
+                {filteredStats?.rejectedToday || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Rejected Today
@@ -230,7 +223,7 @@ const DashboardStats: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="primary.main" fontWeight="bold">
-                {stats?.weeklyTrend?.[stats.weeklyTrend.length - 1]?.reports || 0}
+                {filteredStats?.weeklyTrend?.[filteredStats.weeklyTrend.length - 1]?.reports || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 This Week
@@ -240,7 +233,7 @@ const DashboardStats: React.FC = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6" color="secondary.main" fontWeight="bold">
-                {stats?.monthlyTrend?.[stats.monthlyTrend.length - 1]?.reports || 0}
+                {filteredStats?.monthlyTrend?.[filteredStats.monthlyTrend.length - 1]?.reports || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 This Month

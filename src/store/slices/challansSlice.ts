@@ -6,7 +6,7 @@ import { WebApiService } from '../../web/services/WebApiService';
 // Async thunks
 export const fetchChallans = createAsyncThunk(
   'challans/fetchChallans',
-  async (params?: ChallanFilter & { page?: number; limit?: number }, { rejectWithValue }) => {
+  async (params: (ChallanFilter & { page?: number; limit?: number }) | undefined, { rejectWithValue }: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get('/police/challans', params);
@@ -24,7 +24,7 @@ export const fetchChallans = createAsyncThunk(
 
 export const fetchChallanById = createAsyncThunk(
   'challans/fetchChallanById',
-  async (id: number, { rejectWithValue }) => {
+  async (id: number, { rejectWithValue }: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.get(`/police/challans/${id}`);
@@ -42,7 +42,7 @@ export const fetchChallanById = createAsyncThunk(
 
 export const createChallan = createAsyncThunk(
   'challans/createChallan',
-  async (challanData: ChallanCreate, { rejectWithValue }) => {
+  async (challanData: ChallanCreate, { rejectWithValue }: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.post('/police/challans', challanData);
@@ -60,7 +60,7 @@ export const createChallan = createAsyncThunk(
 
 export const updateChallan = createAsyncThunk(
   'challans/updateChallan',
-  async ({ id, updateData }: { id: number; updateData: ChallanUpdate }, { rejectWithValue }) => {
+  async ({ id, updateData }: { id: number; updateData: ChallanUpdate }, { rejectWithValue }: any) => {
     try {
       const apiService = new WebApiService();
       const response = await apiService.put(`/police/challans/${id}`, updateData);
@@ -81,8 +81,8 @@ export const updateChallan = createAsyncThunk(
 
 // State interface
 interface ChallansState {
-  entities: Record<number, ChallanData>;
-  ids: number[];
+  entities: Record<string | number, ChallanData>;
+  ids: (string | number)[];
   currentChallan: ChallanData | null;
   pagination: {
     page: number;
@@ -94,7 +94,7 @@ interface ChallansState {
   isLoading: boolean;
   isUpdating: boolean;
   error: string | null;
-  selectedChallans: number[];
+  selectedChallans: (string | number)[];
   fineCalculation: any | null;
   vehicleInfo: any | null;
 }
@@ -121,8 +121,8 @@ const initialState: ChallansState = {
 
 // Helper function to normalize challans
 const normalizeChallans = (challans: ChallanData[]) => {
-  const entities: Record<number, ChallanData> = {};
-  const ids: number[] = [];
+  const entities: Record<string | number, ChallanData> = {};
+  const ids: (string | number)[] = [];
   
   challans.forEach(challan => {
     entities[challan.id] = challan;
@@ -158,13 +158,13 @@ const challansSlice = createSlice({
       state.pagination.limit = action.payload;
       state.pagination.page = 1;
     },
-    selectChallan: (state, action: PayloadAction<number>) => {
+    selectChallan: (state, action: PayloadAction<string | number>) => {
       const challanId = action.payload;
       if (!state.selectedChallans.includes(challanId)) {
         state.selectedChallans.push(challanId);
       }
     },
-    deselectChallan: (state, action: PayloadAction<number>) => {
+    deselectChallan: (state, action: PayloadAction<string | number>) => {
       const challanId = action.payload;
       state.selectedChallans = state.selectedChallans.filter(id => id !== challanId);
     },

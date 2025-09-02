@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   Container, 
   Grid, 
@@ -14,16 +14,17 @@ import {
 } from '@mui/material';
 import { 
   Refresh,
-  Download,
-  PictureAsPdf,
-  TableChart,
   Dashboard as DashboardIcon,
   TrendingUp,
   Map,
   People,
-  Assessment
+  Assessment,
+  PictureAsPdf,
+  TableChart,
+  Download
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../../store';
+import { store } from '../../store';
 import { 
   fetchDashboardStats, 
   fetchViolationTypeStats, 
@@ -31,6 +32,10 @@ import {
   fetchOfficerPerformance 
 } from '../../store/slices/dashboardSlice';
 import { useNotification } from '../../hooks/useNotification';
+import ExportMenu from '../../components/common/ExportMenu';
+import GlobalTimeRange from '../../components/common/GlobalTimeRange';
+import { ExportService } from '../../shared/utils/export';
+import html2canvas from 'html2canvas';
 
 // Dashboard Components
 import DashboardStats from '../../components/dashboard/DashboardStats';
@@ -65,9 +70,10 @@ const DashboardPage: React.FC = () => {
   const { showNotification } = useNotification();
   const [tabValue, setTabValue] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  const { stats, isLoading: loading, error } = useAppSelector(state => state.dashboard);
+  const { isLoading: loading, error } = useAppSelector(state => state.dashboard);
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -86,20 +92,448 @@ const DashboardPage: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [dispatch, showNotification]);
+  }, [dispatch, showNotification]); // Keep dependencies but we'll handle the infinite loop differently
+
+  // Use a ref to track if data has been loaded initially
+  const hasLoadedInitialData = useRef(false);
 
   useEffect(() => {
-    loadDashboardData();
+    if (!hasLoadedInitialData.current) {
+      loadDashboardData();
+      hasLoadedInitialData.current = true;
+    }
   }, [loadDashboardData]);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
-  const handleExport = (format: 'pdf' | 'csv' | 'excel') => {
-    // TODO: Implement dashboard export functionality
-    console.log(`Exporting dashboard as ${format}`);
-    showNotification('success', 'Export Success', `Dashboard exported as ${format.toUpperCase()}`);
+     const dashboardRef = useRef<HTMLDivElement>(null);
+   const overviewTabRef = useRef<HTMLDivElement>(null);
+   const trendsTabRef = useRef<HTMLDivElement>(null);
+   const geographicTabRef = useRef<HTMLDivElement>(null);
+   const performanceTabRef = useRef<HTMLDivElement>(null);
+
+    const handleExport = async (format: 'pdf' | 'png' | 'csv') => {
+    console.log(`Starting ${format} export...`);
+    setIsExporting(true);
+    try {
+      // Get dashboard data from Redux store using the store instance
+      const dashboardStats = store.getState().dashboard;
+      console.log('Dashboard stats:', dashboardStats);
+      
+      if (format === 'csv') {
+        console.log('Exporting as CSV...');
+        // Create comprehensive dashboard CSV export
+        const exportData = {
+          title: 'Dashboard Summary',
+          headers: ['Metric', 'Value', 'Description'],
+          rows: [
+            ['Total Reports', dashboardStats.stats?.totalReports || 0, 'Total violation reports in system'],
+            ['Pending Reports', dashboardStats.stats?.pendingReports || 0, 'Reports awaiting review'],
+            ['Approved Today', dashboardStats.stats?.approvedToday || 0, 'Reports approved today'],
+            ['Rejected Today', dashboardStats.stats?.rejectedToday || 0, 'Reports rejected today'],
+            ['Processed Today', dashboardStats.stats?.processedToday || 0, 'Reports processed today'],
+            ['Average Processing Time', `${dashboardStats.stats?.averageProcessingTime || 0}m`, 'Average time to process reports'],
+            ['Top Violation Types', dashboardStats.stats?.topViolationTypes?.length || 0, 'Number of violation types tracked'],
+            ['Geographic Locations', dashboardStats.stats?.geographicStats?.length || 0, 'Cities with violation reports'],
+            ['Last Updated', new Date().toLocaleString(), 'Dashboard data timestamp']
+          ],
+          summary: [
+            { label: 'Export Type', value: 'Dashboard Summary' },
+            { label: 'Generated On', value: new Date().toLocaleDateString() }
+          ],
+          timestamp: new Date()
+        };
+
+        console.log('CSV export data:', exportData);
+        await ExportService.exportAsCSV(exportData);
+        console.log('CSV export completed successfully');
+        showNotification('success', 'Export Success', 'Dashboard exported as CSV successfully');
+      } else if (format === 'png') {
+        console.log('Exporting as PNG...');
+        if (!dashboardRef.current) {
+          throw new Error('Dashboard container not found');
+        }
+
+        await ExportService.exportAsPNG({
+          element: dashboardRef.current,
+          filename: 'dashboard_summary',
+          title: 'Traffic Police Dashboard',
+          subtitle: 'Real-time monitoring and analytics'
+        });
+        console.log('PNG export completed successfully');
+        showNotification('success', 'Export Success', 'Dashboard exported as PNG successfully');
+      } else if (format === 'pdf') {
+        console.log('Exporting as PDF...');
+        showNotification('info', 'Export Started', 'Capturing all dashboard charts for PDF export. This may take a moment...');
+        
+        // Store current tab to restore later
+        const currentTab = tabValue;
+        
+        // Capture all chart images first
+        const chartImages: { title: string; dataUrl: string }[] = [];
+        
+        try {
+          // Helper function to wait for charts to be fully rendered
+          const waitForChartsToRender = async (tabIndex: number) => {
+            // Switch to the tab
+            setTabValue(tabIndex);
+            
+            // Wait for tab switch animation and chart rendering
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Additional wait for charts to fully render
+            await new Promise(resolve => setTimeout(resolve, 4000));
+            
+            // Force a re-render by triggering window resize
+            window.dispatchEvent(new Event('resize'));
+            
+            // Wait a bit more for resize to take effect
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // Additional wait for any async chart loading
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Force another resize to ensure all charts are fully rendered
+            window.dispatchEvent(new Event('resize'));
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          };
+
+                                // Capture Overview Tab Charts individually
+            if (overviewTabRef.current) {
+              console.log('Capturing Overview tab charts individually...');
+              await waitForChartsToRender(0);
+              
+              try {
+                // Find individual chart containers within the overview tab
+                const chartContainers = overviewTabRef.current.querySelectorAll('[data-chart-container]');
+                console.log('Found chart containers:', chartContainers.length);
+                
+                if (chartContainers.length > 0) {
+                  // Capture each chart individually
+                  for (let i = 0; i < chartContainers.length; i++) {
+                    const container = chartContainers[i] as HTMLElement;
+                    const chartTitle = container.getAttribute('data-chart-title') || `Chart ${i + 1}`;
+                    
+                    try {
+                      // Wait a bit more for this specific chart to render
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      
+                      const chartCanvas = await html2canvas(container, {
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff',
+                        scale: 2, // Higher resolution
+                        logging: false,
+                        width: container.offsetWidth,
+                        height: container.offsetHeight,
+                        scrollX: 0,
+                        scrollY: 0,
+                        windowWidth: container.offsetWidth,
+                        windowHeight: container.offsetHeight
+                      });
+                      
+                      chartImages.push({
+                        title: chartTitle,
+                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
+                      });
+                      console.log(`Captured chart: ${chartTitle}`);
+                    } catch (chartError) {
+                      console.error(`Failed to capture chart ${chartTitle}:`, chartError);
+                    }
+                  }
+                } else {
+                  console.log('No individual chart containers found, trying to capture specific charts...');
+                  
+                  // Try to capture specific charts by finding their containers
+                  const violationTypeChart = overviewTabRef.current.querySelector('.MuiCard-root') as HTMLElement;
+                  if (violationTypeChart) {
+                    try {
+                      const chartCanvas = await html2canvas(violationTypeChart, {
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff',
+                        scale: 2,
+                        logging: false,
+                        width: violationTypeChart.offsetWidth,
+                        height: violationTypeChart.offsetHeight,
+                        scrollX: 0,
+                        scrollY: 0,
+                        windowWidth: violationTypeChart.offsetWidth,
+                        windowHeight: violationTypeChart.offsetHeight
+                      });
+                      
+                      chartImages.push({
+                        title: 'Violation Type Distribution',
+                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
+                      });
+                      console.log('Captured Violation Type Distribution chart');
+                    } catch (error) {
+                      console.error('Failed to capture Violation Type Distribution chart:', error);
+                    }
+                  }
+                  
+                  // Try to capture the second chart (Status Distribution)
+                  const allCards = overviewTabRef.current.querySelectorAll('.MuiCard-root');
+                  if (allCards.length > 1) {
+                    try {
+                      const statusChart = allCards[1] as HTMLElement;
+                      const chartCanvas = await html2canvas(statusChart, {
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff',
+                        scale: 2,
+                        logging: false,
+                        width: statusChart.offsetWidth,
+                        height: statusChart.offsetHeight,
+                        scrollX: 0,
+                        scrollY: 0,
+                        windowWidth: statusChart.offsetWidth,
+                        windowHeight: statusChart.offsetHeight
+                      });
+                      
+                      chartImages.push({
+                        title: 'Report Status Distribution',
+                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
+                      });
+                      console.log('Captured Report Status Distribution chart');
+                    } catch (error) {
+                      console.error('Failed to capture Report Status Distribution chart:', error);
+                    }
+                  }
+                  
+                  // Try to capture the third chart (Weekly Trends)
+                  if (allCards.length > 2) {
+                    try {
+                      const trendsChart = allCards[2] as HTMLElement;
+                      const chartCanvas = await html2canvas(trendsChart, {
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff',
+                        scale: 2,
+                        logging: false,
+                        width: trendsChart.offsetWidth,
+                        height: trendsChart.offsetHeight,
+                        scrollX: 0,
+                        scrollY: 0,
+                        windowWidth: trendsChart.offsetWidth,
+                        windowHeight: trendsChart.offsetHeight
+                      });
+                      
+                      chartImages.push({
+                        title: 'Weekly Violation Trends',
+                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
+                      });
+                      console.log('Captured Weekly Violation Trends chart');
+                    } catch (error) {
+                      console.error('Failed to capture Weekly Violation Trends chart:', error);
+                    }
+                  }
+                  
+                  // If still no charts captured, fallback to entire overview tab
+                  if (chartImages.length === 0) {
+                    const overviewCanvas = await html2canvas(overviewTabRef.current, {
+                      useCORS: true,
+                      allowTaint: true,
+                      backgroundColor: '#ffffff',
+                      scale: 2,
+                      logging: false,
+                      width: overviewTabRef.current.offsetWidth,
+                      height: overviewTabRef.current.offsetHeight,
+                      scrollX: 0,
+                      scrollY: 0,
+                      windowWidth: overviewTabRef.current.offsetWidth,
+                      windowHeight: overviewTabRef.current.offsetHeight
+                    });
+                    chartImages.push({
+                      title: 'Overview - All Charts',
+                      dataUrl: overviewCanvas.toDataURL('image/png', 1.0)
+                    });
+                    console.log('Overview tab captured as final fallback');
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to capture Overview tab charts:', error);
+              }
+            } else {
+              console.warn('Overview tab ref not found');
+            }
+
+          // Capture Trends tab charts
+          if (trendsTabRef.current) {
+            console.log('Capturing Trends tab charts...');
+            await waitForChartsToRender(1);
+            
+                         try {
+               const trendsCanvas = await html2canvas(trendsTabRef.current, {
+                 useCORS: true,
+                 allowTaint: true,
+                 backgroundColor: '#ffffff',
+                 scale: 2,
+                 logging: false,
+                 width: trendsTabRef.current.offsetWidth,
+                 height: trendsTabRef.current.offsetHeight,
+                 scrollX: 0,
+                 scrollY: 0,
+                 windowWidth: trendsTabRef.current.offsetWidth,
+                 windowHeight: trendsTabRef.current.offsetHeight
+               });
+              chartImages.push({
+                title: 'Trends - Violation Trends Analysis',
+                dataUrl: trendsCanvas.toDataURL('image/png', 1.0)
+              });
+              console.log('Trends tab captured successfully');
+            } catch (error) {
+              console.error('Failed to capture Trends tab:', error);
+            }
+          } else {
+            console.warn('Trends tab ref not found');
+          }
+
+          // Capture Geographic tab charts
+          if (geographicTabRef.current) {
+            console.log('Capturing Geographic tab charts...');
+            await waitForChartsToRender(2);
+            
+            try {
+              // Additional wait specifically for Geographic tab charts
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              
+              const geographicCanvas = await html2canvas(geographicTabRef.current, {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                scale: 2,
+                logging: false,
+                width: geographicTabRef.current.scrollWidth,
+                height: geographicTabRef.current.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: geographicTabRef.current.scrollWidth,
+                windowHeight: geographicTabRef.current.scrollHeight
+              });
+              chartImages.push({
+                title: 'Geographic - Violation Distribution Map',
+                dataUrl: geographicCanvas.toDataURL('image/png', 1.0)
+              });
+              console.log('Geographic tab captured successfully');
+            } catch (error) {
+              console.error('Failed to capture Geographic tab:', error);
+            }
+          } else {
+            console.warn('Geographic tab ref not found');
+          }
+
+          // Capture Performance tab charts
+          if (performanceTabRef.current) {
+            console.log('Capturing Performance tab charts...');
+            await waitForChartsToRender(3);
+            
+            try {
+              const performanceCanvas = await html2canvas(performanceTabRef.current, {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                scale: 2,
+                logging: false,
+                width: performanceTabRef.current.scrollWidth,
+                height: performanceTabRef.current.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: performanceTabRef.current.scrollWidth,
+                windowHeight: performanceTabRef.current.scrollHeight
+              });
+              chartImages.push({
+                title: 'Performance - Officer Performance Metrics',
+                dataUrl: performanceCanvas.toDataURL('image/png', 1.0)
+              });
+              console.log('Performance tab captured successfully');
+            } catch (error) {
+              console.error('Failed to capture Performance tab:', error);
+            }
+          } else {
+            console.warn('Performance tab ref not found');
+          }
+
+          
+
+          // Restore original tab
+          setTabValue(currentTab);
+          
+          console.log('All charts captured:', chartImages.length);
+          console.log('Captured chart titles:', chartImages.map(img => img.title));
+          
+          if (chartImages.length < 5) {
+            console.warn(`Expected 5 charts but only captured ${chartImages.length}. Some charts may not have loaded properly.`);
+          }
+          
+          // Create comprehensive dashboard PDF export with charts
+          const exportData = {
+            title: 'Traffic Police Dashboard Report',
+            headers: ['Metric', 'Value', 'Description'],
+            rows: [
+              ['Total Reports', dashboardStats.stats?.totalReports || 0, 'Total violation reports in system'],
+              ['Pending Reports', dashboardStats.stats?.pendingReports || 0, 'Reports awaiting review'],
+              ['Approved Today', dashboardStats.stats?.approvedToday || 0, 'Reports approved today'],
+              ['Rejected Today', dashboardStats.stats?.rejectedToday || 0, 'Reports rejected today'],
+              ['Processed Today', dashboardStats.stats?.processedToday || 0, 'Reports processed today'],
+              ['Average Processing Time', `${dashboardStats.stats?.averageProcessingTime || 0}m`, 'Average time to process reports'],
+              ['Top Violation Types', dashboardStats.stats?.topViolationTypes?.length || 0, 'Number of violation types tracked'],
+              ['Geographic Locations', dashboardStats.stats?.geographicStats?.length || 0, 'Cities with violation reports'],
+              ['Last Updated', new Date().toLocaleString(), 'Dashboard data timestamp']
+            ],
+            summary: [
+              { label: 'Export Type', value: 'Dashboard Summary Report' },
+              { label: 'Generated On', value: new Date().toLocaleDateString() },
+              { label: 'Total Metrics', value: '9 Key Performance Indicators' },
+              { label: 'Charts Included', value: `${chartImages.length} Dashboard Sections` }
+            ],
+            timestamp: new Date(),
+            chartImages: chartImages
+          };
+
+          console.log('PDF export data with charts:', exportData);
+          await ExportService.exportAsPDF(exportData);
+          console.log('PDF export completed successfully');
+          showNotification('success', 'Export Success', 'Dashboard exported as PDF successfully');
+        } catch (error) {
+          console.error('Chart capture failed:', error);
+          // Restore original tab
+          setTabValue(currentTab);
+          
+          // Fallback to basic PDF without charts
+          const exportData = {
+            title: 'Traffic Police Dashboard Report',
+            headers: ['Metric', 'Value', 'Description'],
+            rows: [
+              ['Total Reports', dashboardStats.stats?.totalReports || 0, 'Total violation reports in system'],
+              ['Pending Reports', dashboardStats.stats?.pendingReports || 0, 'Reports awaiting review'],
+              ['Approved Today', dashboardStats.stats?.approvedToday || 0, 'Reports approved today'],
+              ['Rejected Today', dashboardStats.stats?.rejectedToday || 0, 'Reports rejected today'],
+              ['Processed Today', dashboardStats.stats?.processedToday || 0, 'Reports processed today'],
+              ['Average Processing Time', `${dashboardStats.stats?.averageProcessingTime || 0}m`, 'Average time to process reports'],
+              ['Top Violation Types', dashboardStats.stats?.topViolationTypes?.length || 0, 'Number of violation types tracked'],
+              ['Geographic Locations', dashboardStats.stats?.geographicStats?.length || 0, 'Cities with violation reports'],
+              ['Last Updated', new Date().toLocaleString(), 'Dashboard data timestamp']
+            ],
+            summary: [
+              { label: 'Export Type', value: 'Dashboard Summary Report' },
+              { label: 'Generated On', value: new Date().toLocaleDateString() },
+              { label: 'Total Metrics', value: '9 Key Performance Indicators' }
+            ],
+            timestamp: new Date()
+          };
+          await ExportService.exportAsPDF(exportData);
+          showNotification('success', 'Export Success', 'Dashboard exported as PDF (basic version)');
+        }
+      }
+    } catch (error) {
+      console.error('Dashboard export failed:', error);
+      showNotification('error', 'Export Failed', `Failed to export dashboard data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const getTabIcon = (index: number) => {
@@ -124,7 +558,7 @@ const DashboardPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
+    <Container maxWidth="xl" sx={{ py: 3 }} ref={dashboardRef}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
@@ -141,6 +575,7 @@ const DashboardPage: React.FC = () => {
             size="small"
             variant="outlined"
           />
+          <GlobalTimeRange />
           <Button
             variant="outlined"
             startIcon={<Refresh />}
@@ -149,13 +584,15 @@ const DashboardPage: React.FC = () => {
           >
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<Download />}
-            onClick={() => handleExport('pdf')}
-          >
-            Export
-          </Button>
+                     <ExportMenu onExport={handleExport} disabled={loading || isExporting} />
+            {isExporting && (
+              <Chip 
+                label="Exporting PDF..."
+                size="small"
+                color="primary"
+                icon={<CircularProgress size={16} />}
+              />
+            )}
         </Box>
       </Box>
 
@@ -205,145 +642,104 @@ const DashboardPage: React.FC = () => {
             iconPosition="start"
             sx={{ minHeight: 64 }}
           />
-          <Tab 
-            label="Analytics" 
-            icon={getTabIcon(4)} 
-            iconPosition="start"
-            sx={{ minHeight: 64 }}
-          />
+          
         </Tabs>
 
-        {/* Overview Tab */}
-        <TabPanel value={tabValue} index={0}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} lg={6}>
-              <ViolationTypeChart 
-                title="Violation Type Distribution"
-                height={400}
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <StatusDistributionChart 
-                title="Report Status Distribution"
-                height={400}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TrendChart 
-                title="Weekly Violation Trends"
-                height={400}
-                defaultPeriod="weekly"
-              />
-            </Grid>
-          </Grid>
-        </TabPanel>
+                           {/* Overview Tab */}
+          <TabPanel value={tabValue} index={0}>
+            <div ref={overviewTabRef}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} lg={6}>
+                  <div data-chart-container data-chart-title="Violation Type Distribution">
+                    <ViolationTypeChart 
+                      title="Violation Type Distribution"
+                      height={400}
+                      isVisible={tabValue === 0}
+                    />
+                  </div>
+                </Grid>
+                <Grid item xs={12} lg={6}>
+                  <div data-chart-container data-chart-title="Report Status Distribution">
+                    <StatusDistributionChart 
+                      title="Report Status Distribution"
+                      height={400}
+                      isVisible={tabValue === 0}
+                    />
+                  </div>
+                </Grid>
+              </Grid>
+            </div>
+          </TabPanel>
 
-        {/* Trends Tab */}
-        <TabPanel value={tabValue} index={1}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <TrendChart 
-                title="Violation Trends Analysis"
-                height={500}
-                defaultPeriod="monthly"
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <ViolationTypeChart 
-                title="Monthly Violation Types"
-                height={400}
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <StatusDistributionChart 
-                title="Monthly Status Trends"
-                height={400}
-              />
-            </Grid>
-          </Grid>
-        </TabPanel>
+                 {/* Trends Tab */}
+         <TabPanel value={tabValue} index={1}>
+           <div ref={trendsTabRef}>
+             <Grid container spacing={3}>
+               <Grid item xs={12}>
+                 <TrendChart 
+                   title="Violation Trends Analysis"
+                   height={500}
+                   defaultPeriod="monthly"
+                 />
+               </Grid>
+               <Grid item xs={12}>
+                 <div data-chart-container data-chart-title="Weekly Violation Trends">
+                   <TrendChart 
+                     title="Weekly Violation Trends"
+                     height={400}
+                     defaultPeriod="weekly"
+                   />
+                 </div>
+               </Grid>
+             </Grid>
+           </div>
+         </TabPanel>
 
         {/* Geographic Tab */}
         <TabPanel value={tabValue} index={2}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <GeographicHeatmap 
-                title="Geographic Violation Distribution"
-                height={600}
-              />
+          <div ref={geographicTabRef}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <GeographicHeatmap 
+                  title="Geographic Violation Distribution"
+                  height={600}
+                  isVisible={tabValue === 2}
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12} lg={6}>
-              <ViolationTypeChart 
-                title="Violation Types by Region"
-                height={400}
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <StatusDistributionChart 
-                title="Status Distribution by Region"
-                height={400}
-              />
-            </Grid>
-          </Grid>
+          </div>
         </TabPanel>
 
         {/* Performance Tab */}
         <TabPanel value={tabValue} index={3}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <OfficerPerformanceChart 
-                title="Officer Performance Metrics"
-                height={600}
-                maxOfficers={15}
-              />
+          <div ref={performanceTabRef}>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <OfficerPerformanceChart 
+                  title="Officer Performance Metrics"
+                  height={600}
+                  maxOfficers={15}
+                />
+              </Grid>
+              <Grid item xs={12} lg={6}>
+                <TrendChart 
+                  title="Processing Time Trends"
+                  height={400}
+                  defaultPeriod="weekly"
+                />
+              </Grid>
+              <Grid item xs={12} lg={6}>
+                <StatusDistributionChart 
+                  title="Approval vs Rejection Rates"
+                  height={400}
+                  isVisible={tabValue === 3}
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12} lg={6}>
-              <TrendChart 
-                title="Processing Time Trends"
-                height={400}
-                defaultPeriod="weekly"
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <StatusDistributionChart 
-                title="Approval vs Rejection Rates"
-                height={400}
-              />
-            </Grid>
-          </Grid>
+          </div>
         </TabPanel>
 
-        {/* Analytics Tab */}
-        <TabPanel value={tabValue} index={4}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} lg={8}>
-              <TrendChart 
-                title="Comprehensive Analytics"
-                height={500}
-                defaultPeriod="monthly"
-              />
-            </Grid>
-            <Grid item xs={12} lg={4}>
-              <ViolationTypeChart 
-                title="Top Violation Types"
-                height={500}
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <OfficerPerformanceChart 
-                title="Top Performers"
-                height={400}
-                maxOfficers={8}
-              />
-            </Grid>
-            <Grid item xs={12} lg={6}>
-              <StatusDistributionChart 
-                title="Resolution Analytics"
-                height={400}
-              />
-            </Grid>
-          </Grid>
-        </TabPanel>
+        
       </Paper>
 
       {/* Quick Actions */}
@@ -370,9 +766,9 @@ const DashboardPage: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<Download />}
-              onClick={() => handleExport('excel')}
+              onClick={() => handleExport('png')}
             >
-              Export Excel Report
+              Export PNG Screenshot
             </Button>
           </Box>
         </Paper>

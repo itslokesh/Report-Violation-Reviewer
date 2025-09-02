@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -13,7 +13,16 @@ import {
   ListItemIcon,
   ListItemText,
   Chip,
-  useTheme
+  useTheme,
+  Button,
+  Popover,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  Stack,
+  Divider,
+  Tooltip
 } from '@mui/material';
 import {
   BarChart,
@@ -21,7 +30,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Legend,
   PieChart,
@@ -39,31 +48,49 @@ import {
   CheckCircle,
   Cancel,
   Schedule,
-  Assignment
+  Assignment,
+  DateRange,
+  CalendarToday,
+  Clear
 } from '@mui/icons-material';
-import { useAppSelector } from '../../store';
-import { selectDashboardStats } from '../../store/slices/dashboardSlice';
+import { useAppSelector, useAppDispatch } from '../../store';
+import { selectStatusDistribution, selectGlobalTimeRange, fetchStatusDistribution } from '../../store/slices/dashboardSlice';
+import { filterDataByGlobalTimeRange, filterDataByLocalTimeRange } from '../../shared/utils/date';
 import { getGridColor, getAxisTickColor } from '../../theme/chart';
 
 interface StatusDistributionChartProps {
   title?: string;
   height?: number;
   showExport?: boolean;
+  isVisible?: boolean;
 }
 
 const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({ 
   title = "Report Status Distribution",
   height = 380,
-  showExport = true
+  showExport = true,
+  isVisible = true
 }) => {
+  const dispatch = useAppDispatch();
   const theme = useTheme();
   const [chartType, setChartType] = useState<'pie' | 'bar' | 'stacked'>('pie');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const { stats, loading } = useAppSelector(selectDashboardStats);
+  const [timeRangeAnchorEl, setTimeRangeAnchorEl] = useState<null | HTMLElement>(null);
+  const { stats, loading } = useAppSelector(selectStatusDistribution);
+  const globalTimeRange = useAppSelector(selectGlobalTimeRange);
+
+  // Local time range state
+  const [localTimeRange, setLocalTimeRange] = useState({
+    type: 'relative' as 'absolute' | 'relative',
+    startDate: '',
+    endDate: '',
+    relativeRange: '7d',
+    isApplied: false
+  });
 
   const handleChartTypeChange = (
     event: React.MouseEvent<HTMLElement>,
-    newChartType: 'pie' | 'bar' | 'stacked' | null,
+    newChartType: 'pie' | 'bar' | null,
   ) => {
     void event;
     if (newChartType !== null) {
@@ -84,6 +111,226 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
     handleExportMenuClose();
   };
 
+  // Time range handlers
+  const handleTimeRangeMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setTimeRangeAnchorEl(event.currentTarget);
+  };
+
+  const handleTimeRangeMenuClose = () => {
+    setTimeRangeAnchorEl(null);
+  };
+
+  const handleTimeRangeTypeChange = (type: 'absolute' | 'relative') => {
+    setLocalTimeRange(prev => ({ ...prev, type }));
+  };
+
+  const handleRelativeRangeChange = (range: string) => {
+    setLocalTimeRange(prev => ({ ...prev, relativeRange: range }));
+  };
+
+  const handleApplyTimeRange = () => {
+    setLocalTimeRange(prev => ({ ...prev, isApplied: true }));
+    handleTimeRangeMenuClose();
+  };
+
+  const handleClearTimeRange = () => {
+    setLocalTimeRange({
+      type: 'relative',
+      startDate: '',
+      endDate: '',
+      relativeRange: '30d',
+      isApplied: false
+    });
+    // Reset to global time range data
+    dispatch(fetchStatusDistribution(undefined));
+  };
+
+  const getTimeRangeDisplay = () => {
+    if (!localTimeRange.isApplied) {
+      return 'Last 30 days';
+    }
+
+    if (localTimeRange.type === 'absolute') {
+      return localTimeRange.startDate && localTimeRange.endDate
+        ? `${localTimeRange.startDate} to ${localTimeRange.endDate}`
+        : 'Select dates';
+    } else {
+      const rangeMap: { [key: string]: string } = {
+        '1d': 'Last 24 hours',
+        '7d': 'Last 7 days',
+        '30d': 'Last 30 days',
+        '90d': 'Last 90 days',
+        '1y': 'Last year',
+        'ytd': 'Year to date',
+        'mtd': 'Month to date'
+      };
+      return rangeMap[localTimeRange.relativeRange] || 'Select range';
+    }
+  };
+
+  function getStatusIcon(status: string) {
+    switch (status) {
+      case 'Pending': return <Schedule fontSize="small" />;
+      case 'Under Review': return <Assignment fontSize="small" />;
+      case 'Approved': return <CheckCircle fontSize="small" />;
+      case 'Rejected': return <Cancel fontSize="small" />;
+      case 'Duplicate': return <Assignment fontSize="small" />;
+      case 'Resolved': return <CheckCircle fontSize="small" />;
+      case 'PENDING': return <Schedule fontSize="small" />;
+      case 'UNDER_REVIEW': return <Assignment fontSize="small" />;
+      case 'APPROVED': return <CheckCircle fontSize="small" />;
+      case 'REJECTED': return <Cancel fontSize="small" />;
+      default: return <Assignment fontSize="small" />;
+    }
+  }
+
+  // Get status data from the new status distribution API
+  const getStatusData = () => {
+    if (!stats || !Array.isArray(stats)) return [];
+
+    console.log('StatusDistributionChart - stats:', stats);
+
+    // Map the API response to our chart format
+    const statusData = stats.map((item: any) => {
+      const status = item.status || 'UNKNOWN';
+      const count = Number(item.count || 0);
+      const percentage = Number(item.percentage || 0);
+      
+      // Map status names to display names
+      let displayStatus = status;
+      switch (status.toUpperCase()) {
+        case 'PENDING':
+          displayStatus = 'Pending';
+          break;
+        case 'UNDER_REVIEW':
+          displayStatus = 'Under Review';
+          break;
+        case 'APPROVED':
+          displayStatus = 'Approved';
+          break;
+        case 'REJECTED':
+          displayStatus = 'Rejected';
+          break;
+        default:
+          displayStatus = status;
+      }
+
+      // Get color based on status
+      let color = '#757575'; // default gray
+      switch (status.toUpperCase()) {
+        case 'PENDING':
+          color = '#ff9800'; // orange
+          break;
+        case 'UNDER_REVIEW':
+          color = '#2196f3'; // blue
+          break;
+        case 'APPROVED':
+          color = '#4caf50'; // green
+          break;
+        case 'REJECTED':
+          color = '#f44336'; // red
+          break;
+      }
+
+      return {
+        status: displayStatus,
+        count,
+        percentage,
+        color,
+        icon: getStatusIcon(displayStatus)
+      };
+    });
+
+    console.log('StatusDistributionChart - processed statusData:', statusData);
+    return statusData;
+  };
+
+  const statusData = getStatusData();
+
+  // Use refs to track the last time range values to prevent infinite loops
+  const lastTimeRangeRef = useRef<string>('');
+
+  // Memoize the effective time range to prevent unnecessary re-renders
+  const effectiveTimeRange = useMemo(() => {
+    return localTimeRange.isApplied ? localTimeRange : globalTimeRange;
+  }, [localTimeRange.isApplied, localTimeRange.type, localTimeRange.startDate, localTimeRange.endDate, localTimeRange.relativeRange, globalTimeRange.isApplied, globalTimeRange.type, globalTimeRange.startDate, globalTimeRange.endDate, globalTimeRange.relativeRange]);
+
+  // Initial data fetch
+  React.useEffect(() => {
+    // Only fetch data if the component is visible
+    if (!isVisible) {
+      return;
+    }
+
+    if (!stats) {
+      console.log('StatusDistributionChart: Initial data fetch');
+      dispatch(fetchStatusDistribution(undefined));
+    }
+  }, [stats, dispatch, isVisible]);
+
+  // Trigger API call when local time range changes
+  React.useEffect(() => {
+    // Only fetch data if the component is visible
+    if (!isVisible) {
+      return;
+    }
+
+    const timeRangeKey = `${effectiveTimeRange.type}-${effectiveTimeRange.startDate}-${effectiveTimeRange.endDate}-${effectiveTimeRange.relativeRange}-${effectiveTimeRange.isApplied}`;
+    
+    if (lastTimeRangeRef.current !== timeRangeKey) {
+      if (localTimeRange.isApplied) {
+        console.log('StatusDistributionChart: Dispatching fetchStatusDistribution due to local time range change:', localTimeRange);
+        // Convert local time range to AnalyticsFilter format
+        let filter: any = {};
+        
+        if (localTimeRange.type === 'absolute' && localTimeRange.startDate && localTimeRange.endDate) {
+          filter.dateRange = {
+            start: new Date(localTimeRange.startDate),
+            end: new Date(localTimeRange.endDate)
+          };
+        } else if (localTimeRange.type === 'relative') {
+          // For relative ranges, we'll need to calculate the actual dates
+          const endDate = new Date();
+          let startDate = new Date();
+          
+          switch (localTimeRange.relativeRange) {
+            case '1d':
+              startDate.setDate(endDate.getDate() - 1);
+              break;
+            case '7d':
+              startDate.setDate(endDate.getDate() - 7);
+              break;
+            case '30d':
+              startDate.setDate(endDate.getDate() - 30);
+              break;
+            case '90d':
+              startDate.setDate(endDate.getDate() - 90);
+              break;
+            case '1y':
+              startDate.setDate(endDate.getDate() - 365);
+              break;
+            case 'ytd':
+              startDate = new Date(endDate.getFullYear(), 0, 1);
+              break;
+            case 'mtd':
+              startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+              break;
+            default:
+              startDate.setDate(endDate.getDate() - 30);
+          }
+          
+          filter.dateRange = { start: startDate, end: endDate };
+        }
+        
+        dispatch(fetchStatusDistribution(filter));
+      } else {
+        // Use global time range
+        dispatch(fetchStatusDistribution(undefined));
+      }
+      lastTimeRangeRef.current = timeRangeKey;
+    }
+  }, [effectiveTimeRange, dispatch, isVisible]);
+
   const getStatusColor = (status: string): string => {
     // High-contrast fixed palette to avoid similar colors
     switch (status) {
@@ -97,77 +344,11 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
     }
   };
 
-  const normalizeStatus = (raw: string): string => {
-    if (!raw) return 'Pending';
-    const key = raw.toString().trim().toUpperCase().replace(/\s+/g, '_');
-    if (key.includes('PENDING')) return 'Pending';
-    if (key.includes('UNDER') && key.includes('REVIEW')) return 'Under Review';
-    if (key.includes('IN_REVIEW')) return 'Under Review';
-    if (key.includes('APPROVED') || key.includes('APPROVE')) return 'Approved';
-    if (key.includes('REJECTED') || key.includes('REJECT')) return 'Rejected';
-    if (key.includes('DUPLICATE') || key.includes('DUP')) return 'Duplicate';
-    if (key.includes('RESOLVED') || key.includes('CLOSED') || key.includes('COMPLETED')) return 'Resolved';
-    // Fallback: title-case the raw
-    return raw
-      .toLowerCase()
-      .split(/[_\s]+/)
-      .map(w => (w ? w[0].toUpperCase() + w.slice(1) : w))
-      .join(' ');
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Pending': return <Schedule fontSize="small" />;
-      case 'Under Review': return <Assignment fontSize="small" />;
-      case 'Approved': return <CheckCircle fontSize="small" />;
-      case 'Rejected': return <Cancel fontSize="small" />;
-      case 'Duplicate': return <Assignment fontSize="small" />;
-      case 'Resolved': return <CheckCircle fontSize="small" />;
-      default: return <Assignment fontSize="small" />;
-    }
-  };
-
-  const statusData = React.useMemo(() => {
-    type Row = { status: string; count: number; percentage: number; color: string; icon: JSX.Element };
-    if (!stats) return [] as Row[];
-    // Prefer backend-provided distribution if available
-    const backend = (stats as any).reportsByStatus as Record<string, number> | undefined;
-    let rows: Array<{ status: string; count: number }> = [];
-    if (backend && Object.keys(backend).length > 0) {
-      rows = Object.entries(backend).map(([k, v]) => ({ status: formatReportStatus(k), count: v ?? 0 }));
-    } else {
-      // Fallback approximation
-      rows = [
-        { status: 'Pending', count: stats.pendingReports || 0 },
-        { status: 'Approved', count: stats.approvedToday || 0 },
-        { status: 'Rejected', count: stats.rejectedToday || 0 },
-      ];
-    }
-    // Optional: include Duplicate and Resolved if backend has them or infer small values
-    const hasDuplicate = rows.some(r => r.status.toLowerCase() === 'duplicate');
-    const hasResolved = rows.some(r => r.status.toLowerCase() === 'resolved');
-    if (!backend) {
-      if (!hasDuplicate) rows.push({ status: 'Duplicate', count: Math.round(((stats.totalReports || 0) * 5) / 100) });
-      if (!hasResolved) rows.push({ status: 'Resolved', count: stats.processedToday || 0 });
-    }
-    const total = rows.reduce((s, r) => s + r.count, 0) || 1;
-    return rows.map(r => ({
-      ...r,
-      percentage: Math.round((r.count / total) * 100),
-      color: getStatusColor(r.status),
-      icon: getStatusIcon(r.status)
-    })) as Row[];
-  }, [stats]);
-
   const weeklyData = React.useMemo(() => {
-    if (!stats?.weeklyTrend) return [] as Array<{ period: string; pending: number; approved: number; rejected: number }>; 
-    return stats.weeklyTrend.map(w => ({
-      period: w.date || 'Week',
-      pending: w.pending || 0,
-      approved: w.approved || 0,
-      rejected: w.rejected || 0
-    }));
-  }, [stats]);
+    // The new status distribution API doesn't include weekly trend data
+    // This is used for the stacked bar chart view
+    return [];
+  }, []);
 
   // Separate heights so the bar chart can be larger and pie matches Violation Type styling
   const pieChartHeight = Math.max(220, height - 120);
@@ -200,6 +381,30 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
               <ToggleButton value="bar" aria-label="bar chart"><BarChartIcon fontSize="small" /></ToggleButton>
               <ToggleButton value="stacked" aria-label="stacked bar chart"><BarChartIcon fontSize="small" /></ToggleButton>
             </ToggleButtonGroup>
+            
+            {/* Time Range Button */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DateRange />}
+              onClick={handleTimeRangeMenuOpen}
+              sx={{ minWidth: 120, justifyContent: 'space-between' }}
+            >
+              {getTimeRangeDisplay()}
+            </Button>
+
+            {localTimeRange.isApplied && (
+              <Tooltip title="Clear time range filter">
+                <IconButton
+                  size="small"
+                  onClick={handleClearTimeRange}
+                  sx={{ color: 'error.main' }}
+                >
+                  <Clear fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+
             {showExport && (
               <>
                 <IconButton size="small" onClick={handleExportMenuOpen}><MoreVert /></IconButton>
@@ -245,7 +450,7 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
                   >
                     {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                   </Pie>
-                  <Tooltip />
+                  <RechartsTooltip />
                 </PieChart>
               </ResponsiveContainer>
             </Box>
@@ -271,7 +476,7 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
               <CartesianGrid strokeDasharray="3 3" stroke={getGridColor(theme)} />
               <XAxis dataKey="status" tickFormatter={(v) => truncate(v)} angle={-32} textAnchor="end" height={84} interval={0} tick={{ fontSize: 12, fill: getAxisTickColor(theme) }} />
               <YAxis domain={[0, 'dataMax + 2']} tick={{ fill: getAxisTickColor(theme) }} />
-              <Tooltip />
+              <RechartsTooltip />
               <Bar dataKey="count" barSize={32}>
                 {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
               </Bar>
@@ -281,9 +486,9 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
           <ResponsiveContainer width="100%" height={barChartHeight}>
             <BarChart data={weeklyData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }} barCategoryGap="8%" barGap={2}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" angle={-45} textAnchor="end" height={80} interval={0} tick={{ fontSize: 12 }} />
+              <XAxis dataKey="week" angle={-45} textAnchor="end" height={80} interval={0} tick={{ fontSize: 12 }} />
               <YAxis />
-              <Tooltip />
+              <RechartsTooltip />
               <Legend />
               <Bar dataKey="pending" stackId="a" fill={theme.palette.warning.main} name="Pending" />
               <Bar dataKey="approved" stackId="a" fill={theme.palette.success.main} name="Approved" />
@@ -292,6 +497,112 @@ const StatusDistributionChart: React.FC<StatusDistributionChartProps> = ({
           </ResponsiveContainer>
         )}
       </CardContent>
+
+      {/* Time Range Popover */}
+      <Popover
+        open={Boolean(timeRangeAnchorEl)}
+        anchorEl={timeRangeAnchorEl}
+        onClose={handleTimeRangeMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        PaperProps={{
+          sx: { width: 350, p: 2 }
+        }}
+      >
+        <Stack spacing={2}>
+          <Typography variant="h6" fontWeight="bold">Chart Time Range Filter</Typography>
+          <Typography variant="body2" color="text.secondary">
+            This filter will be applied to this chart only
+          </Typography>
+
+          {/* Time Range Type Selection */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>Filter Type</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant={localTimeRange.type === 'relative' ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<Schedule />}
+                onClick={() => handleTimeRangeTypeChange('relative')}
+                fullWidth
+              >
+                Relative
+              </Button>
+              <Button
+                variant={localTimeRange.type === 'absolute' ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<CalendarToday />}
+                onClick={() => handleTimeRangeTypeChange('absolute')}
+                fullWidth
+              >
+                Absolute
+              </Button>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          {/* Relative Time Range Options */}
+          {localTimeRange.type === 'relative' && (
+            <FormControl fullWidth size="small">
+              <InputLabel>Select Range</InputLabel>
+              <Select
+                value={localTimeRange.relativeRange}
+                label="Select Range"
+                onChange={(e) => handleRelativeRangeChange(e.target.value)}
+              >
+                <MenuItem value="1d">Last 24 hours</MenuItem>
+                <MenuItem value="7d">Last 7 days</MenuItem>
+                <MenuItem value="30d">Last 30 days</MenuItem>
+                <MenuItem value="90d">Last 90 days</MenuItem>
+                <MenuItem value="1y">Last year</MenuItem>
+                <MenuItem value="ytd">Year to date</MenuItem>
+                <MenuItem value="mtd">Month to date</MenuItem>
+              </Select>
+            </FormControl>
+          )}
+
+          {/* Absolute Time Range Options */}
+          {localTimeRange.type === 'absolute' && (
+            <Stack spacing={2}>
+              <TextField
+                label="Start Date"
+                type="date"
+                value={localTimeRange.startDate}
+                onChange={(e) => setLocalTimeRange(prev => ({ ...prev, startDate: e.target.value }))}
+                size="small"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="End Date"
+                type="date"
+                value={localTimeRange.endDate}
+                onChange={(e) => setLocalTimeRange(prev => ({ ...prev, endDate: e.target.value }))}
+                size="small"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+          )}
+
+          {/* Apply Button */}
+          <Button
+            variant="contained"
+            onClick={handleApplyTimeRange}
+            fullWidth
+            disabled={localTimeRange.type === 'absolute' ? (!localTimeRange.startDate || !localTimeRange.endDate) : !localTimeRange.relativeRange}
+          >
+            Apply Filter
+          </Button>
+        </Stack>
+      </Popover>
     </Card>
   );
 };

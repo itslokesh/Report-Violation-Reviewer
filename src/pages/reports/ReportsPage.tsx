@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { 
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TablePagination, CircularProgress, Alert, Button, TableSortLabel, Stack, FormControl, InputLabel, Select, MenuItem, Checkbox, ListItemText
 } from '@mui/material';
+import ExportMenu from '../../components/common/ExportMenu';
+import { ExportService } from '../../shared/utils/export';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { 
   fetchReports, 
@@ -71,15 +73,85 @@ const ReportsPage: React.FC = () => {
     dispatch(setLimit(parseInt(event.target.value, 10)));
   };
 
+  const reportsRef = useRef<HTMLDivElement>(null);
+
+  const handleExport = async (format: 'pdf' | 'png' | 'csv') => {
+    if (!reports || reports.length === 0) {
+      throw new Error('No reports to export');
+    }
+
+    if (format === 'csv') {
+      const exportData = {
+        title: 'Violation Reports',
+        headers: ['ID', 'Violation Type', 'Status', 'Reporter City', 'Vehicle Number', 'Description', 'Created At'],
+        rows: reports.map(report => [
+          report.id,
+          formatViolationType(report.violationType),
+          formatReportStatus(report.status),
+          report.reporterCity,
+          report.vehicleNumber,
+          report.description,
+          new Date(report.createdAt).toLocaleDateString()
+        ]),
+        summary: [
+          { label: 'Total Reports', value: reports.length },
+          { label: 'Pending', value: reports.filter(r => r.status === ReportStatus.PENDING).length },
+          { label: 'Approved', value: reports.filter(r => r.status === ReportStatus.APPROVED).length },
+          { label: 'Rejected', value: reports.filter(r => r.status === ReportStatus.REJECTED).length }
+        ],
+        timestamp: new Date()
+      };
+
+      await ExportService.exportAsCSV(exportData);
+    } else if (format === 'png') {
+      if (!reportsRef.current) {
+        throw new Error('Reports container not found');
+      }
+
+      await ExportService.exportAsPNG({
+        element: reportsRef.current,
+        filename: 'violation_reports',
+        title: 'Violation Reports',
+        subtitle: 'Reports List'
+      });
+    } else if (format === 'pdf') {
+      const exportData = {
+        title: 'Violation Reports Report',
+        headers: ['ID', 'Violation Type', 'Status', 'Reporter City', 'Vehicle Number', 'Description', 'Created At'],
+        rows: reports.map(report => [
+          report.id,
+          formatViolationType(report.violationType),
+          formatReportStatus(report.status),
+          report.reporterCity,
+          report.vehicleNumber,
+          report.description,
+          new Date(report.createdAt).toLocaleDateString()
+        ]),
+        summary: [
+          { label: 'Total Reports', value: reports.length },
+          { label: 'Pending', value: reports.filter(r => r.status === ReportStatus.PENDING).length },
+          { label: 'Approved', value: reports.filter(r => r.status === ReportStatus.APPROVED).length },
+          { label: 'Rejected', value: reports.filter(r => r.status === ReportStatus.REJECTED).length }
+        ],
+        timestamp: new Date()
+      };
+
+      await ExportService.exportAsPDF(exportData);
+    }
+  };
+
   return (
-    <Box>
+    <Box ref={reportsRef}>
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
         <Typography variant="h4" gutterBottom>
           Violation Reports
         </Typography>
-        <Button variant="outlined" onClick={() => dispatch(fetchReports({ page: pagination.page, limit: pagination.limit, sortBy: pagination.sortBy, sortOrder: pagination.sortOrder, ...(filters ?? {}), ...(filters?.violationType && (filters.violationType as any).length > 1 ? { violationTypeMode: 'any' as const } : {}) }))}>
-          Refresh
-        </Button>
+        <Box display="flex" alignItems="center" gap={1}>
+          <ExportMenu onExport={handleExport} disabled={!reports || reports.length === 0} />
+          <Button variant="outlined" onClick={() => dispatch(fetchReports({ page: pagination.page, limit: pagination.limit, sortBy: pagination.sortBy, sortOrder: pagination.sortOrder, ...(filters ?? {}), ...(filters?.violationType && (filters.violationType as any).length > 1 ? { violationTypeMode: 'any' as const } : {}) }))}>
+            Refresh
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ p: 2, mb: 2 }}>

@@ -68,7 +68,7 @@ export class ViolationService extends BaseRepository<
     return this.update(reportId, updateData);
   }
 
-  async markAsDuplicate(reportId: number, duplicateGroupId: string, confidenceScore: number): Promise<ViolationReport> {
+  async markAsDuplicate(reportId: number, _duplicateGroupId: string, confidenceScore: number): Promise<ViolationReport> {
     const updateData: ViolationReportUpdate = {
       status: ReportStatus.DUPLICATE,
       reviewNotes: `Marked as duplicate with confidence score: ${confidenceScore}%`,
