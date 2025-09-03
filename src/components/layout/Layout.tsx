@@ -20,6 +20,7 @@ import {
   useTheme,
   useMediaQuery
 } from '@mui/material';
+import { tnPoliceLogo } from '../../assets/images';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
@@ -163,6 +164,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
+          
+          {/* Logo and Department Name */}
+          <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+            <img 
+              src={tnPoliceLogo} 
+              alt="Tamil Nadu Police Logo" 
+              style={{ width: '32px', height: '32px', marginRight: '12px' }}
+            />
+            <Typography 
+              variant="h6" 
+              noWrap 
+              component="div" 
+              sx={{ 
+                fontWeight: 'bold',
+                color: 'white',
+                display: { xs: 'none', sm: 'block' }
+              }}
+            >
+              Coimbatore City Traffic Police
+            </Typography>
+          </Box>
           
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {menuItems.find(item => item.path === location.pathname)?.text || 'Traffic Police Admin'}

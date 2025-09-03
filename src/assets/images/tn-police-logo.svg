@@ -1,0 +1,57 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer circle with dark blue background -->
+  <circle cx="24" cy="24" r="22" fill="#1e3a8a" stroke="#fbbf24" stroke-width="1"/>
+  
+  <!-- Text ring - TAMIL NADU POLICE -->
+  <path d="M 24 2 A 22 22 0 0 1 24 46 A 22 22 0 0 1 24 2" fill="none" stroke="white" stroke-width="0.5" opacity="0.8"/>
+  <text x="24" y="8" text-anchor="middle" fill="white" font-size="3" font-weight="bold" font-family="Arial, sans-serif">TAMIL NADU</text>
+  <text x="24" y="42" text-anchor="middle" fill="white" font-size="3" font-weight="bold" font-family="Arial, sans-serif">POLICE</text>
+  
+  <!-- Gopuram (temple tower) -->
+  <g fill="#fbbf24" stroke="#92400e" stroke-width="0.3">
+    <!-- Base -->
+    <rect x="18" y="28" width="12" height="2" fill="#fbbf24"/>
+    <!-- First tier -->
+    <rect x="19" y="26" width="10" height="2" fill="#fbbf24"/>
+    <!-- Second tier -->
+    <rect x="20" y="24" width="8" height="2" fill="#fbbf24"/>
+    <!-- Third tier -->
+    <rect x="21" y="22" width="6" height="2" fill="#fbbf24"/>
+    <!-- Top tier -->
+    <rect x="22" y="20" width="4" height="2" fill="#fbbf24"/>
+    <!-- Kalasam (finial) -->
+    <circle cx="24" cy="18" r="1" fill="#fbbf24"/>
+  </g>
+  
+  <!-- Lion Capital of Ashoka -->
+  <g fill="#fbbf24" stroke="#92400e" stroke-width="0.2">
+    <!-- Base -->
+    <rect x="22" y="30" width="4" height="1" fill="#fbbf24"/>
+    <!-- Central pillar -->
+    <rect x="23.5" y="29" width="1" height="1" fill="#fbbf24"/>
+    <!-- Dharma Chakra -->
+    <circle cx="24" cy="28.5" r="0.8" fill="none" stroke="#fbbf24" stroke-width="0.3"/>
+    <!-- Lions (simplified) -->
+    <path d="M 22 27 L 23 26 L 25 26 L 26 27 Z" fill="#fbbf24"/>
+  </g>
+  
+  <!-- Indian Flag representations -->
+  <g>
+    <!-- Left flag -->
+    <rect x="16" y="30" width="2" height="1.5" fill="#ff6b35"/>
+    <rect x="16" y="31.5" width="2" height="0.5" fill="white"/>
+    <rect x="16" y="32" width="2" height="0.5" fill="#138808"/>
+    <circle cx="17" cy="31.75" r="0.2" fill="#000080"/>
+    
+    <!-- Right flag -->
+    <rect x="30" y="30" width="2" height="1.5" fill="#ff6b35"/>
+    <rect x="30" y="31.5" width="2" height="0.5" fill="white"/>
+    <rect x="30" y="32" width="2" height="0.5" fill="#138808"/>
+    <circle cx="31" cy="31.75" r="0.2" fill="#000080"/>
+  </g>
+  
+  <!-- Red banner with motto -->
+  <path d="M 8 38 Q 24 42 40 38" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <rect x="8" y="38" width="32" height="3" fill="#dc2626" rx="1"/>
+  <text x="24" y="40.5" text-anchor="middle" fill="white" font-size="2.5" font-weight="bold" font-family="serif">TRUTH ALONE TRIUMPHS</text>
+</svg>

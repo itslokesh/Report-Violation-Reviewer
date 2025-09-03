@@ -12,6 +12,7 @@ import {
   InputAdornment,
   IconButton
 } from '@mui/material';
+import { tnPoliceLogo } from '../../assets/images';
 import {
   Visibility,
   VisibilityOff,
@@ -110,24 +111,24 @@ const LoginPage: React.FC = () => {
           <CardContent sx={{ p: 4 }}>
             {/* Header */}
             <Box sx={{ textAlign: 'center', mb: 4 }}>
-              <Box
-                sx={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: '50%',
-                  backgroundColor: 'primary.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mx: 'auto',
-                  mb: 2
-                }}
-              >
-                <LockIcon sx={{ color: 'white', fontSize: 30 }} />
+              {/* Logo */}
+              <Box sx={{ mb: 2 }}>
+                <img 
+                  src={tnPoliceLogo} 
+                  alt="Tamil Nadu Police Logo" 
+                  style={{ width: '64px', height: '64px' }}
+                />
               </Box>
-              <Typography variant="h4" component="h1" gutterBottom>
+              
+              {/* Department Name */}
+              <Typography variant="h5" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                Coimbatore City Traffic Police
+              </Typography>
+              
+              <Typography variant="h6" component="h2" gutterBottom>
                 Traffic Police Admin
               </Typography>
+              
               <Typography variant="body2" color="text.secondary">
                 Sign in to your account
               </Typography>

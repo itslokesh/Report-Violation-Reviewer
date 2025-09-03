@@ -96,6 +96,15 @@ export class ExportService {
    */
   static async exportAsPDF(data: ExportData): Promise<void> {
     console.log('ExportService: Starting PDF export...');
+    console.log('ExportService: Data received:', {
+      title: data.title,
+      headersCount: data.headers?.length,
+      rowsCount: data.rows?.length,
+      summaryCount: data.summary?.length,
+      chartImagesCount: data.chartImages?.length,
+      hasTimestamp: !!data.timestamp
+    });
+    
     try {
       console.log('ExportService: Creating jsPDF document...');
       const doc = new jsPDF();
@@ -201,10 +210,11 @@ export class ExportService {
          this.createSimpleTable(doc, headers, tableData, summary && summary.length > 0 ? (timestamp ? 80 : 70) : (timestamp ? 40 : 30));
       }
 
-             // Add chart images if provided
-       if (chartImages && chartImages.length > 0) {
-         console.log('ExportService: Adding chart images to PDF...');
-         let currentY = doc.internal.pageSize.height - 20; // Start from bottom of current page
+                     // Add chart images if provided
+        if (chartImages && chartImages.length > 0) {
+          console.log('ExportService: Adding chart images to PDF...');
+          console.log(`ExportService: Processing ${chartImages.length} chart images`);
+          let currentY = doc.internal.pageSize.height - 20; // Start from bottom of current page
          
          for (let i = 0; i < chartImages.length; i++) {
            const chart = chartImages[i];
@@ -243,20 +253,45 @@ export class ExportService {
               
               console.log(`ExportService: Chart ${i + 1} actual dimensions: ${actualWidth}x${actualHeight}, aspect ratio: ${actualAspectRatio.toFixed(2)}`);
               
-              // Calculate image dimensions to fit page width while maintaining original aspect ratio
-              const pageWidth = doc.internal.pageSize.width - 40; // 20px margin on each side
-              const pageHeight = doc.internal.pageSize.height - 40; // 20px margin top/bottom
+                             // Calculate image dimensions to fit page width while maintaining original aspect ratio
+               // IMPORTANT: Use PDF units (mm) for all calculations, not pixel dimensions
+               const pdfPageWidth = doc.internal.pageSize.width; // PDF width in mm
+               const pdfPageHeight = doc.internal.pageSize.height; // PDF height in mm
+               const pdfMargin = 20; // 20mm margin on each side
+               
+               // Maximum available space in PDF units
+               const maxWidth = pdfPageWidth - (pdfMargin * 2);
+               const maxHeight = (pdfPageHeight - (pdfMargin * 2)) * 0.8; // 80% of available height
+               
+               // Always constrain to PDF page width first, regardless of original image dimensions
+               // This prevents the pixel-to-mm conversion issue
+               const finalImgWidth = maxWidth;
+               const finalImgHeight = finalImgWidth / actualAspectRatio;
+               
+               // If height exceeds max height, scale down proportionally
+               let finalWidth = finalImgWidth;
+               let finalHeight = finalImgHeight;
+               
+               if (finalHeight > maxHeight) {
+                 finalHeight = maxHeight;
+                 finalWidth = finalHeight * actualAspectRatio;
+               }
+               
+               // Final safety check - ensure dimensions never exceed PDF page bounds
+               finalWidth = Math.min(finalWidth, maxWidth);
+               finalHeight = Math.min(finalHeight, maxHeight);
               
-              // Use actual aspect ratio instead of fixed 16:9
-              const imgWidth = pageWidth;
-              const imgHeight = imgWidth / actualAspectRatio;
-              
-              // Ensure image doesn't exceed page height
-              const finalImgHeight = Math.min(imgHeight, pageHeight * 0.7);
-              const finalImgWidth = finalImgHeight * actualAspectRatio;
-              
-              // Center the image horizontally
-              const imgX = (doc.internal.pageSize.width - finalImgWidth) / 2;
+                             // Center the image horizontally
+               const imgX = (doc.internal.pageSize.width - finalWidth) / 2;
+               
+               // Debug logging for dimensions
+               console.log(`ExportService: Chart ${i + 1} dimension calculations:`);
+               console.log(`  - Page dimensions: ${pdfPageWidth}x${pdfPageHeight} mm`);
+               console.log(`  - Available space: ${maxWidth}x${maxHeight} mm`);
+               console.log(`  - Original image: ${actualWidth}x${actualHeight} pixels (ratio: ${actualAspectRatio.toFixed(2)})`);
+               console.log(`  - Final dimensions: ${finalWidth.toFixed(1)}x${finalHeight.toFixed(1)} mm`);
+               console.log(`  - Image position: x=${imgX.toFixed(1)} mm, y=${currentY} mm`);
+               console.log(`  - Right edge: ${(imgX + finalWidth).toFixed(1)} mm (page width: ${pdfPageWidth} mm)`);
               
               // Check if image fits on current page
               if (currentY + finalImgHeight > doc.internal.pageSize.height - 20) {
@@ -264,11 +299,22 @@ export class ExportService {
                 currentY = 20;
               }
               
-              // Add image to PDF
-              doc.addImage(base64Data, 'PNG', imgX, currentY, finalImgWidth, finalImgHeight);
-              currentY += finalImgHeight + 20; // Add some spacing after image
-              
-              console.log(`ExportService: Added chart ${i + 1}/${chartImages.length}: ${chart.title} with dimensions ${finalImgWidth.toFixed(1)}x${finalImgHeight.toFixed(1)}`);
+                             // Final safety check - ensure image fits within page bounds
+               if (imgX < 0 || imgX + finalWidth > doc.internal.pageSize.width) {
+                 console.warn(`ExportService: Chart ${i + 1} would exceed page bounds, adjusting position`);
+                 // Force image to fit within page bounds
+                 const safeImgX = Math.max(pdfMargin, Math.min(imgX, doc.internal.pageSize.width - finalWidth - pdfMargin));
+                 console.log(`ExportService: Adjusted image X from ${imgX.toFixed(1)} to ${safeImgX.toFixed(1)} mm`);
+                 
+                 // Add image to PDF with safe position
+                 doc.addImage(base64Data, 'PNG', safeImgX, currentY, finalWidth, finalHeight);
+               } else {
+                 // Add image to PDF
+                 doc.addImage(base64Data, 'PNG', imgX, currentY, finalWidth, finalHeight);
+               }
+               currentY += finalHeight + 20; // Add some spacing after image
+               
+               console.log(`ExportService: Added chart ${i + 1}/${chartImages.length}: ${chart.title} with dimensions ${finalWidth.toFixed(1)}x${finalHeight.toFixed(1)} mm`);
             } catch (imageError) {
               console.error('ExportService: Failed to add chart image:', imageError);
               doc.text('Chart image could not be loaded', 20, currentY);
@@ -277,11 +323,13 @@ export class ExportService {
          }
        }
 
-      // Save PDF
-      const pdfFilename = `${data.title}_${this.getTimestamp()}.pdf`;
-      console.log('ExportService: Saving PDF file:', pdfFilename);
-      doc.save(pdfFilename);
-      console.log('ExportService: PDF export completed');
+             // Save PDF
+       const pdfFilename = `${data.title}_${this.getTimestamp()}.pdf`;
+       console.log('ExportService: Saving PDF file:', pdfFilename);
+       console.log('ExportService: About to call doc.save()...');
+       doc.save(pdfFilename);
+       console.log('ExportService: doc.save() completed successfully');
+       console.log('ExportService: PDF export completed');
     } catch (error) {
       console.error('PDF export failed:', error);
       throw new Error('Failed to export as PDF');

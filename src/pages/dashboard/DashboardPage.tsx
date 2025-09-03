@@ -174,299 +174,134 @@ const DashboardPage: React.FC = () => {
         // Capture all chart images first
         const chartImages: { title: string; dataUrl: string }[] = [];
         
-        try {
-          // Helper function to wait for charts to be fully rendered
-          const waitForChartsToRender = async (tabIndex: number) => {
-            // Switch to the tab
-            setTabValue(tabIndex);
-            
-            // Wait for tab switch animation and chart rendering
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-            // Additional wait for charts to fully render
-            await new Promise(resolve => setTimeout(resolve, 4000));
-            
-            // Force a re-render by triggering window resize
-            window.dispatchEvent(new Event('resize'));
-            
-            // Wait a bit more for resize to take effect
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            // Additional wait for any async chart loading
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Force another resize to ensure all charts are fully rendered
-            window.dispatchEvent(new Event('resize'));
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          };
+                 try {
+           // Simplified approach - just wait for charts to render
+           console.log('Waiting for charts to render...');
+           await new Promise(resolve => setTimeout(resolve, 3000));
+           
+           // Force a re-render
+           window.dispatchEvent(new Event('resize'));
+           await new Promise(resolve => setTimeout(resolve, 2000));
 
                                 // Capture Overview Tab Charts individually
-            if (overviewTabRef.current) {
-              console.log('Capturing Overview tab charts individually...');
-              await waitForChartsToRender(0);
-              
-              try {
-                // Find individual chart containers within the overview tab
-                const chartContainers = overviewTabRef.current.querySelectorAll('[data-chart-container]');
-                console.log('Found chart containers:', chartContainers.length);
-                
-                if (chartContainers.length > 0) {
-                  // Capture each chart individually
-                  for (let i = 0; i < chartContainers.length; i++) {
-                    const container = chartContainers[i] as HTMLElement;
-                    const chartTitle = container.getAttribute('data-chart-title') || `Chart ${i + 1}`;
-                    
-                    try {
-                      // Wait a bit more for this specific chart to render
-                      await new Promise(resolve => setTimeout(resolve, 1000));
-                      
-                      const chartCanvas = await html2canvas(container, {
-                        useCORS: true,
-                        allowTaint: true,
-                        backgroundColor: '#ffffff',
-                        scale: 2, // Higher resolution
-                        logging: false,
-                        width: container.offsetWidth,
-                        height: container.offsetHeight,
-                        scrollX: 0,
-                        scrollY: 0,
-                        windowWidth: container.offsetWidth,
-                        windowHeight: container.offsetHeight
-                      });
-                      
-                      chartImages.push({
-                        title: chartTitle,
-                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
-                      });
-                      console.log(`Captured chart: ${chartTitle}`);
-                    } catch (chartError) {
-                      console.error(`Failed to capture chart ${chartTitle}:`, chartError);
-                    }
-                  }
-                } else {
-                  console.log('No individual chart containers found, trying to capture specific charts...');
-                  
-                  // Try to capture specific charts by finding their containers
-                  const violationTypeChart = overviewTabRef.current.querySelector('.MuiCard-root') as HTMLElement;
-                  if (violationTypeChart) {
-                    try {
-                      const chartCanvas = await html2canvas(violationTypeChart, {
-                        useCORS: true,
-                        allowTaint: true,
-                        backgroundColor: '#ffffff',
-                        scale: 2,
-                        logging: false,
-                        width: violationTypeChart.offsetWidth,
-                        height: violationTypeChart.offsetHeight,
-                        scrollX: 0,
-                        scrollY: 0,
-                        windowWidth: violationTypeChart.offsetWidth,
-                        windowHeight: violationTypeChart.offsetHeight
-                      });
-                      
-                      chartImages.push({
-                        title: 'Violation Type Distribution',
-                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
-                      });
-                      console.log('Captured Violation Type Distribution chart');
-                    } catch (error) {
-                      console.error('Failed to capture Violation Type Distribution chart:', error);
-                    }
-                  }
-                  
-                  // Try to capture the second chart (Status Distribution)
-                  const allCards = overviewTabRef.current.querySelectorAll('.MuiCard-root');
-                  if (allCards.length > 1) {
-                    try {
-                      const statusChart = allCards[1] as HTMLElement;
-                      const chartCanvas = await html2canvas(statusChart, {
-                        useCORS: true,
-                        allowTaint: true,
-                        backgroundColor: '#ffffff',
-                        scale: 2,
-                        logging: false,
-                        width: statusChart.offsetWidth,
-                        height: statusChart.offsetHeight,
-                        scrollX: 0,
-                        scrollY: 0,
-                        windowWidth: statusChart.offsetWidth,
-                        windowHeight: statusChart.offsetHeight
-                      });
-                      
-                      chartImages.push({
-                        title: 'Report Status Distribution',
-                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
-                      });
-                      console.log('Captured Report Status Distribution chart');
-                    } catch (error) {
-                      console.error('Failed to capture Report Status Distribution chart:', error);
-                    }
-                  }
-                  
-                  // Try to capture the third chart (Weekly Trends)
-                  if (allCards.length > 2) {
-                    try {
-                      const trendsChart = allCards[2] as HTMLElement;
-                      const chartCanvas = await html2canvas(trendsChart, {
-                        useCORS: true,
-                        allowTaint: true,
-                        backgroundColor: '#ffffff',
-                        scale: 2,
-                        logging: false,
-                        width: trendsChart.offsetWidth,
-                        height: trendsChart.offsetHeight,
-                        scrollX: 0,
-                        scrollY: 0,
-                        windowWidth: trendsChart.offsetWidth,
-                        windowHeight: trendsChart.offsetHeight
-                      });
-                      
-                      chartImages.push({
-                        title: 'Weekly Violation Trends',
-                        dataUrl: chartCanvas.toDataURL('image/png', 1.0)
-                      });
-                      console.log('Captured Weekly Violation Trends chart');
-                    } catch (error) {
-                      console.error('Failed to capture Weekly Violation Trends chart:', error);
-                    }
-                  }
-                  
-                  // If still no charts captured, fallback to entire overview tab
-                  if (chartImages.length === 0) {
-                    const overviewCanvas = await html2canvas(overviewTabRef.current, {
-                      useCORS: true,
-                      allowTaint: true,
-                      backgroundColor: '#ffffff',
-                      scale: 2,
-                      logging: false,
-                      width: overviewTabRef.current.offsetWidth,
-                      height: overviewTabRef.current.offsetHeight,
-                      scrollX: 0,
-                      scrollY: 0,
-                      windowWidth: overviewTabRef.current.offsetWidth,
-                      windowHeight: overviewTabRef.current.offsetHeight
-                    });
-                    chartImages.push({
-                      title: 'Overview - All Charts',
-                      dataUrl: overviewCanvas.toDataURL('image/png', 1.0)
-                    });
-                    console.log('Overview tab captured as final fallback');
-                  }
-                }
-              } catch (error) {
-                console.error('Failed to capture Overview tab charts:', error);
-              }
+                         if (overviewTabRef.current) {
+               console.log('Capturing Overview tab...');
+               
+                                try {
+                   // Simple approach - try to capture the entire overview tab
+                   console.log('Attempting to capture overview tab...');
+                   
+                   // Debug: Check what's in the overview tab
+                   console.log('Overview tab ref:', overviewTabRef.current);
+                   if (overviewTabRef.current) {
+                     console.log('Overview tab children:', overviewTabRef.current.children.length);
+                     console.log('Overview tab innerHTML length:', overviewTabRef.current.innerHTML.length);
+                     
+                     // Check for chart elements
+                     const svgElements = overviewTabRef.current.querySelectorAll('svg');
+                     const canvasElements = overviewTabRef.current.querySelectorAll('canvas');
+                     console.log(`Found ${svgElements.length} SVG elements and ${canvasElements.length} canvas elements`);
+                     
+                     // Try to capture individual charts first
+                     const chartContainers = overviewTabRef.current.querySelectorAll('[data-chart-container]');
+                     console.log(`Found ${chartContainers.length} chart containers`);
+                     
+                     for (let i = 0; i < chartContainers.length; i++) {
+                       const container = chartContainers[i] as HTMLElement;
+                       const title = container.getAttribute('data-chart-title') || `Chart ${i + 1}`;
+                       console.log(`Attempting to capture ${title}...`);
+                       
+                       try {
+                         const chartCanvas = await html2canvas(container, {
+                           useCORS: true,
+                           allowTaint: true,
+                           backgroundColor: '#ffffff',
+                           scale: 1.0,
+                           logging: true,
+                           width: 600,
+                           height: 400
+                         });
+                         
+                         const dataUrl = chartCanvas.toDataURL('image/png', 1.0);
+                         console.log(`${title} captured successfully:`, {
+                           canvasDimensions: `${chartCanvas.width}x${chartCanvas.height}`,
+                           dataUrlLength: dataUrl.length
+                         });
+                         
+                         chartImages.push({
+                           title: title,
+                           dataUrl: dataUrl
+                         });
+                         
+                       } catch (error) {
+                         console.error(`Failed to capture ${title}:`, error);
+                       }
+                     }
+                     
+                     // If no individual charts were captured, try the overview tab
+                     if (chartImages.length === 0) {
+                       console.log('No individual charts captured, trying overview tab...');
+                       
+                       try {
+                         const overviewCanvas = await html2canvas(overviewTabRef.current, {
+                           useCORS: true,
+                           allowTaint: true,
+                           backgroundColor: '#ffffff',
+                           scale: 1.0,
+                           logging: true,
+                           width: 1200,
+                           height: 800
+                         });
+                         
+                         const dataUrl = overviewCanvas.toDataURL('image/png', 1.0);
+                         console.log('Overview tab captured successfully:', {
+                           canvasDimensions: `${overviewCanvas.width}x${overviewCanvas.height}`,
+                           dataUrlLength: dataUrl.length
+                         });
+                         
+                         chartImages.push({
+                           title: 'Dashboard Overview',
+                           dataUrl: dataUrl
+                         });
+                         
+                       } catch (error) {
+                         console.error('Failed to capture overview tab:', error);
+                         console.error('Error details:', error);
+                       }
+                     }
+                   } else {
+                     console.warn('Overview tab ref not found');
+                   }
+                 } catch (error) {
+                   console.error('Failed to capture Overview tab charts:', error);
+                 }
             } else {
               console.warn('Overview tab ref not found');
             }
 
-          // Capture Trends tab charts
-          if (trendsTabRef.current) {
-            console.log('Capturing Trends tab charts...');
-            await waitForChartsToRender(1);
-            
-                         try {
-               const trendsCanvas = await html2canvas(trendsTabRef.current, {
-                 useCORS: true,
-                 allowTaint: true,
-                 backgroundColor: '#ffffff',
-                 scale: 2,
-                 logging: false,
-                 width: trendsTabRef.current.offsetWidth,
-                 height: trendsTabRef.current.offsetHeight,
-                 scrollX: 0,
-                 scrollY: 0,
-                 windowWidth: trendsTabRef.current.offsetWidth,
-                 windowHeight: trendsTabRef.current.offsetHeight
-               });
-              chartImages.push({
-                title: 'Trends - Violation Trends Analysis',
-                dataUrl: trendsCanvas.toDataURL('image/png', 1.0)
-              });
-              console.log('Trends tab captured successfully');
-            } catch (error) {
-              console.error('Failed to capture Trends tab:', error);
-            }
-          } else {
-            console.warn('Trends tab ref not found');
-          }
-
-          // Capture Geographic tab charts
-          if (geographicTabRef.current) {
-            console.log('Capturing Geographic tab charts...');
-            await waitForChartsToRender(2);
-            
-            try {
-              // Additional wait specifically for Geographic tab charts
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              
-              const geographicCanvas = await html2canvas(geographicTabRef.current, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#ffffff',
-                scale: 2,
-                logging: false,
-                width: geographicTabRef.current.scrollWidth,
-                height: geographicTabRef.current.scrollHeight,
-                scrollX: 0,
-                scrollY: 0,
-                windowWidth: geographicTabRef.current.scrollWidth,
-                windowHeight: geographicTabRef.current.scrollHeight
-              });
-              chartImages.push({
-                title: 'Geographic - Violation Distribution Map',
-                dataUrl: geographicCanvas.toDataURL('image/png', 1.0)
-              });
-              console.log('Geographic tab captured successfully');
-            } catch (error) {
-              console.error('Failed to capture Geographic tab:', error);
-            }
-          } else {
-            console.warn('Geographic tab ref not found');
-          }
-
-          // Capture Performance tab charts
-          if (performanceTabRef.current) {
-            console.log('Capturing Performance tab charts...');
-            await waitForChartsToRender(3);
-            
-            try {
-              const performanceCanvas = await html2canvas(performanceTabRef.current, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#ffffff',
-                scale: 2,
-                logging: false,
-                width: performanceTabRef.current.scrollWidth,
-                height: performanceTabRef.current.scrollHeight,
-                scrollX: 0,
-                scrollY: 0,
-                windowWidth: performanceTabRef.current.scrollWidth,
-                windowHeight: performanceTabRef.current.scrollHeight
-              });
-              chartImages.push({
-                title: 'Performance - Officer Performance Metrics',
-                dataUrl: performanceCanvas.toDataURL('image/png', 1.0)
-              });
-              console.log('Performance tab captured successfully');
-            } catch (error) {
-              console.error('Failed to capture Performance tab:', error);
-            }
-          } else {
-            console.warn('Performance tab ref not found');
-          }
+                     // For now, just capture the overview tab to keep it simple
+           console.log('Skipping other tabs for now, focusing on overview tab...');
 
           
 
-          // Restore original tab
-          setTabValue(currentTab);
+                     // Restore original tab
+           setTabValue(currentTab);
+           
+           console.log('=== CHART CAPTURE SUMMARY ===');
+           console.log('Total charts captured:', chartImages.length);
+           console.log('Captured chart titles:', chartImages.map(img => img.title));
+           console.log('Chart data URLs:', chartImages.map(img => ({
+             title: img.title,
+             dataUrlLength: img.dataUrl.length,
+             dataUrlPreview: img.dataUrl.substring(0, 100) + '...'
+           })));
+           console.log('=== END CHART CAPTURE SUMMARY ===');
           
-          console.log('All charts captured:', chartImages.length);
-          console.log('Captured chart titles:', chartImages.map(img => img.title));
-          
-          if (chartImages.length < 5) {
-            console.warn(`Expected 5 charts but only captured ${chartImages.length}. Some charts may not have loaded properly.`);
-          }
+                     if (chartImages.length === 0) {
+             console.warn('No charts were captured! This is unexpected.');
+           } else {
+             console.log(`Successfully captured ${chartImages.length} chart(s)`);
+           }
           
           // Create comprehensive dashboard PDF export with charts
           const exportData = {
@@ -494,9 +329,17 @@ const DashboardPage: React.FC = () => {
           };
 
           console.log('PDF export data with charts:', exportData);
-          await ExportService.exportAsPDF(exportData);
-          console.log('PDF export completed successfully');
-          showNotification('success', 'Export Success', 'Dashboard exported as PDF successfully');
+          console.log('About to call ExportService.exportAsPDF...');
+          
+          try {
+            await ExportService.exportAsPDF(exportData);
+            console.log('PDF export completed successfully');
+            showNotification('success', 'Export Success', 'Dashboard exported as PDF successfully');
+          } catch (exportError) {
+            console.error('PDF export failed:', exportError);
+            showNotification('error', 'Export Failed', 'Failed to export dashboard as PDF');
+            throw exportError;
+          }
         } catch (error) {
           console.error('Chart capture failed:', error);
           // Restore original tab
@@ -715,11 +558,10 @@ const DashboardPage: React.FC = () => {
           <div ref={performanceTabRef}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
-                <OfficerPerformanceChart 
-                  title="Officer Performance Metrics"
-                  height={600}
-                  maxOfficers={15}
-                />
+                                 <OfficerPerformanceChart 
+                   title="Officer Performance Metrics"
+                   height={600}
+                 />
               </Grid>
               <Grid item xs={12} lg={6}>
                 <TrendChart 
